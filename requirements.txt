@@ -1,0 +1,22 @@
+# Core dependencies for Activity Planner
+# Uses CPU-compatible versions for maximum compatibility
+
+# Data processing
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Visualization
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# Information Retrieval and Semantic Search
+rank-bm25>=0.2.2
+sentence-transformers>=2.2.0
+
+# FAISS - CPU version (compatible with all platforms)
+# Note: For GPU acceleration, install faiss-gpu instead (requires CUDA)
+faiss-cpu>=1.7.4
+
+# Jupyter notebook support
+jupyter>=1.0.0
+ipykernel>=6.0.0
