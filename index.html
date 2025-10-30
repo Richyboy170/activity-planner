@@ -1490,9 +1490,9 @@ select.form-control {
             <div class="flex justify-between items-center" style="margin-bottom: var(--space-24);">
                 <h1>My Activity Plan</h1>
                 <div class="flex gap-8">
-                    <button class="btn btn--outline btn--sm">Export PDF</button>
-                    <button class="btn btn--outline btn--sm">Export CSV</button>
-                    <button class="btn btn--outline btn--sm">Sync with Google Calendar</button>
+                    <button class="btn btn--outline btn--sm" id="exportPdfBtn" onclick="exportToPDF()">Export PDF</button>
+                    <button class="btn btn--outline btn--sm" id="exportCsvBtn" onclick="exportToCSV()">Export CSV</button>
+                    <button class="btn btn--outline btn--sm" id="exportIcsBtn" onclick="exportToICS()">Export ICS</button>
                 </div>
             </div>
             
@@ -2161,79 +2161,402 @@ select.form-control {
     </div>
 
     <script>
-        // Sample activities data
-        const sampleActivities = [
-            {
-                title: "Nature Scavenger Hunt",
-                age_min: 4,
-                age_max: 12,
-                duration_mins: 60,
-                tags: ["outdoor", "nature", "exploration", "learning"],
-                cost: "Free",
-                indoor_outdoor: "Outdoor",
-                season: ["Spring", "Summer", "Fall"],
-                materials_needed: ["printed list", "collection bag", "pencil"],
-                how_to_play: "Create a list of nature items to find. Kids search for leaves, rocks, flowers, etc. Check off items as found.",
-                players: "2-8",
-                parent_caution: "Supervise children around plants and ensure they don't pick protected species"
-            },
-            {
-                title: "Indoor Obstacle Course",
-                age_min: 3,
-                age_max: 10,
-                duration_mins: 45,
-                tags: ["indoor", "physical", "creative", "energy"],
-                cost: "Free",
-                indoor_outdoor: "Indoor",
-                season: ["All seasons"],
-                materials_needed: ["pillows", "chairs", "tape", "rope or string"],
-                how_to_play: "Set up stations using household items. Kids crawl under tables, jump over pillows, balance on tape lines.",
-                players: "1-6",
-                parent_caution: "Ensure obstacle course is safe and age-appropriate"
-            },
-            {
-                title: "Kitchen Science Experiments",
-                age_min: 5,
-                age_max: 15,
-                duration_mins: 90,
-                tags: ["indoor", "science", "learning", "hands-on"],
-                cost: "$1-10",
-                indoor_outdoor: "Indoor",
-                season: ["All seasons"],
-                materials_needed: ["baking soda", "vinegar", "food coloring", "measuring cups"],
-                how_to_play: "Conduct safe experiments like volcano reactions, color mixing, density experiments with common kitchen items.",
-                players: "1-4",
-                parent_caution: "Adult supervision required when using any chemicals or hot materials"
-            },
-            {
-                title: "Backyard Camping Adventure",
-                age_min: 6,
-                age_max: 16,
-                duration_mins: 480,
-                tags: ["outdoor", "adventure", "nature", "overnight"],
-                cost: "$11-25",
-                indoor_outdoor: "Outdoor",
-                season: ["Spring", "Summer", "Fall"],
-                materials_needed: ["tent", "sleeping bags", "flashlights", "snacks"],
-                how_to_play: "Set up tent in backyard, tell stories, stargaze, enjoy outdoor sleeping experience.",
-                players: "2-6",
-                parent_caution: "Check weather conditions and have indoor backup plan"
-            },
-            {
-                title: "Art Gallery Creation",
-                age_min: 4,
-                age_max: 14,
-                duration_mins: 120,
-                tags: ["indoor", "creative", "art", "exhibition"],
-                cost: "$1-10",
-                indoor_outdoor: "Indoor",
-                season: ["All seasons"],
-                materials_needed: ["paper", "crayons", "markers", "string", "clothespins"],
-                how_to_play: "Kids create artwork, then set up gallery display with proper lighting and labels.",
-                players: "1-8",
-                parent_caution: "Supervise use of art supplies and ensure adequate ventilation"
+        // Sample activities data - will be loaded from CSV
+        let sampleActivities = [];
+
+        // CSV parsing function
+        function parseCSV(text) {
+            const lines = text.split('\n');
+            const headers = lines[0].split(',');
+            const result = [];
+
+            for (let i = 1; i < lines.length; i++) {
+                if (!lines[i].trim()) continue;
+
+                const obj = {};
+                const currentLine = parseCSVLine(lines[i]);
+
+                for (let j = 0; j < headers.length; j++) {
+                    const header = headers[j].trim();
+                    let value = currentLine[j] ? currentLine[j].trim() : '';
+
+                    // Parse special fields
+                    if (header === 'age_min' || header === 'age_max' || header === 'duration_mins') {
+                        value = parseInt(value) || 0;
+                    } else if (header === 'tags' || header === 'materials_needed' || header === 'how_to_play') {
+                        // Parse array fields - they come as JSON strings from CSV
+                        try {
+                            value = JSON.parse(value.replace(/'/g, '"'));
+                            if (!Array.isArray(value)) value = [value];
+                            // For how_to_play, join array into string
+                            if (header === 'how_to_play') {
+                                value = Array.isArray(value) ? value.join(' ') : value;
+                            }
+                        } catch (e) {
+                            if (header === 'tags') {
+                                value = value ? value.split(',').map(t => t.trim()) : [];
+                            } else if (header === 'materials_needed') {
+                                value = value ? [value] : [];
+                            } else {
+                                value = value || '';
+                            }
+                        }
+                    } else if (header === 'season') {
+                        // Handle season field
+                        value = value.toLowerCase() === 'all' ? ['All seasons'] : [value];
+                    } else if (header === 'cost') {
+                        // Normalize cost field
+                        if (value.toLowerCase() === 'free') value = 'Free';
+                        else if (value.toLowerCase() === 'low') value = '$1-10';
+                    } else if (header === 'indoor_outdoor') {
+                        // Capitalize first letter
+                        if (value.toLowerCase() === 'both') value = 'Both';
+                        else value = value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
+                    } else if (header === 'parent_caution') {
+                        value = value === 'no' || value === '' ? '' : 'Parental supervision recommended';
+                    }
+
+                    obj[header] = value;
+                }
+
+                if (obj.title) result.push(obj);
             }
-        ];
+
+            return result;
+        }
+
+        // Helper function to parse CSV line accounting for quoted fields
+        function parseCSVLine(line) {
+            const result = [];
+            let current = '';
+            let inQuotes = false;
+
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+
+                if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    result.push(current);
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            result.push(current);
+
+            return result;
+        }
+
+        // Load activities from CSV
+        async function loadActivitiesFromCSV() {
+            try {
+                const response = await fetch('dataset/dataset empty -open space-.csv');
+                const text = await response.text();
+                sampleActivities = parseCSV(text);
+                console.log(`Loaded ${sampleActivities.length} activities from CSV`);
+
+                // Initialize the display
+                currentActivities = [...sampleActivities];
+                renderFeaturedActivities();
+            } catch (error) {
+                console.error('Error loading CSV:', error);
+                // Fallback to empty array if CSV fails to load
+                sampleActivities = [];
+                alert('Could not load activities database. Please check that the dataset file exists.');
+            }
+        }
+
+        // Export to ICS (iCalendar format)
+        function exportToICS() {
+            if (scheduledActivities.length === 0) {
+                alert('No activities scheduled yet. Please add activities to your calendar first.');
+                return;
+            }
+
+            let icsContent = [
+                'BEGIN:VCALENDAR',
+                'VERSION:2.0',
+                'PRODID:-//Family Activity Planner//EN',
+                'CALSCALE:GREGORIAN',
+                'METHOD:PUBLISH',
+                'X-WR-CALNAME:Family Activities',
+                'X-WR-TIMEZONE:UTC'
+            ];
+
+            scheduledActivities.forEach(event => {
+                const startDate = new Date(event.date);
+                const endDate = new Date(startDate.getTime() + (event.duration || 60) * 60000);
+
+                icsContent.push(
+                    'BEGIN:VEVENT',
+                    `DTSTART:${formatICSDate(startDate)}`,
+                    `DTEND:${formatICSDate(endDate)}`,
+                    `SUMMARY:${event.title}`,
+                    `DESCRIPTION:${event.description || event.how_to_play || ''}`,
+                    `LOCATION:${event.indoor_outdoor || ''}`,
+                    `UID:${event.id || Date.now()}@familyactivityplanner.com`,
+                    `DTSTAMP:${formatICSDate(new Date())}`,
+                    'END:VEVENT'
+                );
+            });
+
+            icsContent.push('END:VCALENDAR');
+
+            const blob = new Blob([icsContent.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'family-activities.ics';
+            link.click();
+
+            console.log('ICS exported successfully');
+        }
+
+        // Helper function to format dates for ICS
+        function formatICSDate(date) {
+            const pad = (n) => n < 10 ? '0' + n : n;
+            return date.getUTCFullYear() +
+                   pad(date.getUTCMonth() + 1) +
+                   pad(date.getUTCDate()) + 'T' +
+                   pad(date.getUTCHours()) +
+                   pad(date.getUTCMinutes()) +
+                   pad(date.getUTCSeconds()) + 'Z';
+        }
+
+        // Export to CSV
+        function exportToCSV() {
+            if (scheduledActivities.length === 0) {
+                alert('No activities scheduled yet. Please add activities to your calendar first.');
+                return;
+            }
+
+            const headers = ['Date', 'Time', 'Activity', 'Duration (mins)', 'Age Range', 'Location', 'Cost', 'Materials', 'Instructions'];
+            const rows = scheduledActivities.map(activity => {
+                const date = new Date(activity.date);
+                return [
+                    date.toLocaleDateString(),
+                    date.toLocaleTimeString(),
+                    activity.title || '',
+                    activity.duration_mins || '',
+                    `${activity.age_min}-${activity.age_max}` || '',
+                    activity.indoor_outdoor || '',
+                    activity.cost || '',
+                    Array.isArray(activity.materials_needed) ? activity.materials_needed.join('; ') : activity.materials_needed || '',
+                    activity.how_to_play || ''
+                ].map(field => `"${String(field).replace(/"/g, '""')}"`).join(',');
+            });
+
+            const csvContent = [headers.join(','), ...rows].join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'family-activities-schedule.csv';
+            link.click();
+
+            console.log('CSV exported successfully');
+        }
+
+        // Export to PDF
+        function exportToPDF() {
+            if (scheduledActivities.length === 0) {
+                alert('No activities scheduled yet. Please add activities to your calendar first.');
+                return;
+            }
+
+            // Create a simple text-based PDF using a data URL approach
+            const pdf = generatePDFContent();
+
+            // For a real implementation, you'd use jsPDF library
+            // For now, we'll create a printable HTML version
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(`
+                <html>
+                <head>
+                    <title>Family Activities Schedule</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; padding: 20px; }
+                        h1 { color: #21808D; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+                        th { background-color: #21808D; color: white; }
+                        tr:nth-child(even) { background-color: #f9f9f9; }
+                        .activity-details { font-size: 0.9em; color: #666; margin-top: 5px; }
+                        @media print {
+                            button { display: none; }
+                        }
+                    </style>
+                </head>
+                <body>
+                    <h1>Family Activities Schedule</h1>
+                    <p>Generated on: ${new Date().toLocaleDateString()}</p>
+                    <button onclick="window.print()" style="padding: 10px 20px; background: #21808D; color: white; border: none; border-radius: 5px; cursor: pointer; margin-bottom: 20px;">Print / Save as PDF</button>
+                    ${pdf}
+                </body>
+                </html>
+            `);
+            printWindow.document.close();
+        }
+
+        function generatePDFContent() {
+            let html = '<table>';
+            html += '<thead><tr><th>Date & Time</th><th>Activity</th><th>Details</th></tr></thead>';
+            html += '<tbody>';
+
+            scheduledActivities
+                .sort((a, b) => new Date(a.date) - new Date(b.date))
+                .forEach(activity => {
+                    const date = new Date(activity.date);
+                    html += `
+                        <tr>
+                            <td>
+                                <strong>${date.toLocaleDateString()}</strong><br>
+                                ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                            </td>
+                            <td>
+                                <strong>${activity.title}</strong>
+                                <div class="activity-details">
+                                    Ages: ${activity.age_min}-${activity.age_max} |
+                                    Duration: ${activity.duration_mins} mins |
+                                    ${activity.indoor_outdoor}
+                                </div>
+                            </td>
+                            <td>
+                                <div class="activity-details">
+                                    <strong>Cost:</strong> ${activity.cost}<br>
+                                    ${activity.materials_needed ? `<strong>Materials:</strong> ${Array.isArray(activity.materials_needed) ? activity.materials_needed.join(', ') : activity.materials_needed}<br>` : ''}
+                                    ${activity.how_to_play ? `<strong>Instructions:</strong> ${activity.how_to_play}` : ''}
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                });
+
+            html += '</tbody></table>';
+            return html;
+        }
+
+        // Add activity to plan (schedule it)
+        function addToPlan(activityTitle) {
+            const activity = sampleActivities.find(a => a.title === activityTitle);
+            if (!activity) return;
+
+            // Prompt for date and time
+            const dateStr = prompt('Enter date (YYYY-MM-DD):', new Date().toISOString().split('T')[0]);
+            if (!dateStr) return;
+
+            const timeStr = prompt('Enter time (HH:MM):', '10:00');
+            if (!timeStr) return;
+
+            const dateTime = new Date(`${dateStr}T${timeStr}`);
+
+            if (isNaN(dateTime.getTime())) {
+                alert('Invalid date or time format');
+                return;
+            }
+
+            // Add to scheduled activities
+            const scheduledActivity = {
+                ...activity,
+                date: dateTime.toISOString(),
+                id: Date.now() + Math.random()
+            };
+
+            scheduledActivities.push(scheduledActivity);
+
+            alert(`"${activity.title}" has been added to your calendar on ${dateTime.toLocaleDateString()} at ${dateTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`);
+
+            // Render calendar if on calendar view
+            renderCalendar();
+
+            console.log('Activity scheduled:', scheduledActivity);
+        }
+
+        // Render dynamic calendar
+        function renderCalendar() {
+            const calendarGrid = document.querySelector('.calendar-grid');
+            if (!calendarGrid) return;
+
+            // Get current month
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = now.getMonth();
+
+            // Clear existing calendar (except headers)
+            const headers = Array.from(calendarGrid.querySelectorAll('.calendar-header'));
+            calendarGrid.innerHTML = '';
+            headers.forEach(h => calendarGrid.appendChild(h));
+
+            // Get first day of month and number of days
+            const firstDay = new Date(year, month, 1).getDay();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+            // Add empty cells for days before month starts
+            for (let i = 0; i < firstDay; i++) {
+                const emptyDay = document.createElement('div');
+                emptyDay.className = 'calendar-day';
+                calendarGrid.appendChild(emptyDay);
+            }
+
+            // Add days of month
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dayElement = document.createElement('div');
+                dayElement.className = 'calendar-day';
+
+                const dayNumber = document.createElement('div');
+                dayNumber.className = 'day-number';
+                dayNumber.textContent = day;
+                dayElement.appendChild(dayNumber);
+
+                // Check for scheduled activities on this day
+                const dayDate = new Date(year, month, day);
+                const dayActivities = scheduledActivities.filter(activity => {
+                    const activityDate = new Date(activity.date);
+                    return activityDate.getDate() === day &&
+                           activityDate.getMonth() === month &&
+                           activityDate.getFullYear() === year;
+                });
+
+                if (dayActivities.length > 0) {
+                    const activitiesContainer = document.createElement('div');
+                    activitiesContainer.className = 'day-activities';
+
+                    dayActivities.forEach(activity => {
+                        const activityDiv = document.createElement('div');
+                        activityDiv.className = 'calendar-activity';
+                        const time = new Date(activity.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                        activityDiv.textContent = `${activity.title} (${time})`;
+                        activityDiv.style.cursor = 'pointer';
+                        activityDiv.onclick = () => viewScheduledActivity(activity.id);
+                        activitiesContainer.appendChild(activityDiv);
+                    });
+
+                    dayElement.appendChild(activitiesContainer);
+                }
+
+                calendarGrid.appendChild(dayElement);
+            }
+        }
+
+        // View scheduled activity details
+        function viewScheduledActivity(activityId) {
+            const activity = scheduledActivities.find(a => a.id === activityId);
+            if (!activity) return;
+
+            const date = new Date(activity.date);
+            const confirmDelete = confirm(
+                `${activity.title}\n\n` +
+                `Date: ${date.toLocaleDateString()}\n` +
+                `Time: ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}\n` +
+                `Duration: ${activity.duration_mins} mins\n\n` +
+                `Click OK to remove this activity from your calendar`
+            );
+
+            if (confirmDelete) {
+                scheduledActivities = scheduledActivities.filter(a => a.id !== activityId);
+                renderCalendar();
+                alert('Activity removed from calendar');
+            }
+        }
 
         // Application state
         let currentActivities = [...sampleActivities];
@@ -2242,6 +2565,7 @@ select.form-control {
         let currentFilters = {};
         let groupMembers = [];
         let editingMemberId = null;
+        let scheduledActivities = []; // Store scheduled activities with dates and times
         
         // Sample group members data
         const sampleGroupMembers = [
@@ -2833,7 +3157,7 @@ select.form-control {
         function showView(viewId) {
             views.forEach(view => view.classList.remove('active'));
             navLinks.forEach(link => link.classList.remove('active'));
-            
+
             document.getElementById(viewId).classList.add('active');
             const activeLink = document.querySelector(`[data-view="${viewId}"]`);
             if (activeLink) activeLink.classList.add('active');
@@ -2843,6 +3167,8 @@ select.form-control {
                 renderFeaturedActivities();
             } else if (viewId === 'search') {
                 renderActivities(currentActivities);
+            } else if (viewId === 'calendar') {
+                renderCalendar();
             } else if (viewId === 'my-group') {
                 renderGroupMembers();
             } else if (viewId === 'member-form') {
@@ -3376,10 +3702,10 @@ select.form-control {
             
             // Auto-start in guest mode on first load
             startGuestMode();
-            
-            // Initialize with featured activities
-            renderFeaturedActivities();
-            
+
+            // Load activities from CSV and initialize display
+            loadActivitiesFromCSV();
+
             // Initialize range displays
             setTimeout(() => {
                 document.querySelectorAll('input[type="range"]').forEach(range => {
@@ -3395,6 +3721,10 @@ select.form-control {
         window.addMemberTemplate = addMemberTemplate;
         window.getPersonalizedRecommendations = getPersonalizedRecommendations;
         window.setupMemberPageForm = setupMemberPageForm;
+        window.addToPlan = addToPlan;
+        window.exportToICS = exportToICS;
+        window.exportToCSV = exportToCSV;
+        window.exportToPDF = exportToPDF;
         
         // Setup BMI calculation for member form when view is shown
         function setupMemberFormEventListeners() {
