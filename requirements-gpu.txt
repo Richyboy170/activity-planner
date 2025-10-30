@@ -1,0 +1,31 @@
+# GPU-accelerated dependencies for Activity Planner
+# For Windows with NVIDIA GPU and CUDA support
+
+# IMPORTANT: For Windows GPU support, use conda instead of pip:
+# conda install -c pytorch -c nvidia faiss-gpu=1.7.4 cudatoolkit=11.8
+
+# Data processing
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Visualization
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# Information Retrieval and Semantic Search
+rank-bm25>=0.2.2
+sentence-transformers>=2.2.0
+
+# FAISS - GPU version
+# Note: On Windows, install via conda (see above comment)
+# On Linux with CUDA: pip install faiss-gpu
+# faiss-gpu>=1.7.4
+
+# Jupyter notebook support
+jupyter>=1.0.0
+ipykernel>=6.0.0
+
+# PyTorch (required for GPU support)
+# Install via: conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia
+# torch>=2.0.0
+# torchvision>=0.15.0
