@@ -43,8 +43,7 @@ For content, we collect activity data from trusted family and education resource
 
 \textbf{Corpus.} The dataset with more than 100 activities is gathered with the following columns:  
 \texttt{title, age\_min, age\_max, duration\_mins, tags, cost, indoor\_outdoor, season, materials\_needed, how\_to\_play, players, \\ parent\_caution}.  \\
-\textbf{Data Cleaning.} The text columns are turned to be list columns in the dataset, such as \texttt{materials\_needed} and \texttt{how\_to\_play}.
-
+\textbf{Data Cleaning.} The text columns are turned to be list columns in the dataset, such as \texttt{materials\_needed} and \texttt{how\_to\_play}. \\
 
 
 \section*{Architecture}
