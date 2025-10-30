@@ -2463,7 +2463,6 @@ select.form-control {
 
             scheduledActivities.push(scheduledActivity);
 
-            alert(`"${activity.title}" has been added to your calendar on ${dateTime.toLocaleDateString()} at ${dateTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`);
 
             // Render calendar if on calendar view
             renderCalendar();
@@ -2554,7 +2553,6 @@ select.form-control {
             if (confirmDelete) {
                 scheduledActivities = scheduledActivities.filter(a => a.id !== activityId);
                 renderCalendar();
-                alert('Activity removed from calendar');
             }
         }
 
@@ -2829,7 +2827,6 @@ select.form-control {
             groupMembers.push(newMember);
             renderGroupMembers();
             
-            alert(`${template.name} template added to your group! You can edit the details by clicking the Edit button.`);
         }
 
         // DOM elements
@@ -3003,7 +3000,6 @@ select.form-control {
             groupMembers.push(duplicatedMember);
             renderGroupMembers();
             
-            alert(`${memberToDuplicate.name} has been duplicated! You can edit the copy to customize it.`);
         }
         
         function populateMemberPageForm(form, member) {
@@ -3294,7 +3290,7 @@ select.form-control {
         }
 
         function addToPlan(title) {
-            alert(`"${title}" has been added to your plan!`);
+            // Activity added silently
         }
 
         function editActivity(title) {
@@ -3489,8 +3485,7 @@ select.form-control {
                     alert('Please agree to the terms and conditions');
                     return;
                 }
-                
-                alert('Account created successfully!');
+
                 login();
             });
 
@@ -3571,14 +3566,13 @@ select.form-control {
                 
                 // Add to activities list
                 sampleActivities.push(newActivity);
-                
-                alert('Activity submitted successfully! It will be reviewed by our team.');
+
                 e.target.reset();
             });
 
             // Save draft button
             document.getElementById('saveDraftBtn').addEventListener('click', () => {
-                alert('Activity saved as draft!');
+                // Draft saved silently
             });
 
 
