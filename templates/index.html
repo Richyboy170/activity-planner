@@ -3378,10 +3378,13 @@ select.form-control {
             }
             console.log('Guest mode activated');
             // Update UI for guest mode
-            loginNavBtn.classList.add('hidden');
-            document.getElementById('guestInfo').classList.remove('hidden');
-            document.getElementById('userInfo').classList.add('hidden');
-            document.getElementById('myGroupNavLink').style.display = 'block';
+            if (loginNavBtn) loginNavBtn.classList.add('hidden');
+            const guestInfo = document.getElementById('guestInfo');
+            if (guestInfo) guestInfo.classList.remove('hidden');
+            const userInfoElem = document.getElementById('userInfo');
+            if (userInfoElem) userInfoElem.classList.add('hidden');
+            const myGroupNav = document.getElementById('myGroupNavLink');
+            if (myGroupNav) myGroupNav.style.display = 'block';
             document.getElementById('guestModeBanner').classList.remove('hidden');
             
             // Pre-populate with sample data if empty

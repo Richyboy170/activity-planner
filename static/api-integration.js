@@ -4,8 +4,8 @@
 const API_BASE_URL = 'http://localhost:5000/api';
 let isBackendAvailable = false;
 let currentGroupProfile = {};
-let currentActivities = [];
-let savedActivities = JSON.parse(localStorage.getItem('savedActivities') || '[]');
+// Note: currentActivities is declared in the main HTML file
+// Note: savedActivities uses localStorage
 
 // Initialize
 async function initializeBackend() {
@@ -239,7 +239,10 @@ function populateResultsPage(recommendations) {
         recList.appendChild(card);
     });
 
-    currentActivities = recommendations;
+    // Update currentActivities in global scope (defined in HTML)
+    if (typeof window.currentActivities !== 'undefined') {
+        window.currentActivities = recommendations;
+    }
 }
 
 // Hide Results & Show Home
@@ -409,9 +412,10 @@ function showActivityDetails(activity, index) {
 
 // Add to My Plan
 function addToMyPlan(index) {
-    const activity = currentActivities[index];
+    const activity = (typeof window.currentActivities !== 'undefined' ? window.currentActivities : [])[index];
     if (!activity) return;
 
+    const savedActivities = JSON.parse(localStorage.getItem('savedActivities') || '[]');
     if (!savedActivities.find(a => a.title === activity.title)) {
         savedActivities.push(activity);
         localStorage.setItem('savedActivities', JSON.stringify(savedActivities));
@@ -482,9 +486,13 @@ async function performSearch() {
         const data = await response.json();
 
         if (data.status === 'success') {
-            currentActivities = data.activities;
+            if (typeof window.currentActivities !== 'undefined') {
+                window.currentActivities = data.activities;
+            }
             displayActivities(data.activities, 'activitiesGrid');
-            showView('search');
+            if (typeof showView === 'function') {
+                showView('search');
+            }
         }
     } catch (error) {
         console.error('Error searching activities:', error);
@@ -504,7 +512,9 @@ function displayActivities(activities, containerId) {
         card.className = 'activity-card';
         card.style.cursor = 'pointer';
         card.onclick = () => {
-            currentActivities = activities;
+            if (typeof window.currentActivities !== 'undefined') {
+                window.currentActivities = activities;
+            }
             showActivityDetails(activity, index);
         };
 
@@ -535,7 +545,7 @@ function loadMyPlan() {
     const planContainer = document.getElementById('myPlanActivities');
     if (!planContainer) return;
 
-    savedActivities = JSON.parse(localStorage.getItem('savedActivities') || '[]');
+    const savedActivities = JSON.parse(localStorage.getItem('savedActivities') || '[]');
 
     if (savedActivities.length === 0) {
         planContainer.innerHTML = '<p style="text-align: center; color: #6c757d; padding: 40px;">No activities saved yet. Add activities from search or recommendations!</p>';
