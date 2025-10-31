@@ -243,132 +243,24 @@ def create_app(dataset_path='dataset/dataset.csv', models_dir='models'):
     def recommend():
         if not api:
             return jsonify({'error': 'API not initialized'}), 500
-
+        
         try:
             data = request.get_json()
             query = data.get('query', '')
             group_members = data.get('group_members', [])
             preferences = data.get('preferences', [])
             top_k = data.get('top_k', 5)
-
+            
             if not query:
                 return jsonify({'error': 'Query required'}), 400
-
+            
             result = api.recommend(query, group_members, preferences, top_k)
             return jsonify(result), 200 if result['status'] == 'success' else 500
-
+        
         except Exception as e:
             logger.error(f"Error: {e}")
             return jsonify({'error': str(e)}), 500
-
-    # API: Get all activities (for featured/browse)
-    @app.route('/api/activities', methods=['GET'])
-    def get_activities():
-        if not api:
-            return jsonify({'error': 'API not initialized'}), 500
-
-        try:
-            limit = int(request.args.get('limit', 20))
-            offset = int(request.args.get('offset', 0))
-
-            activities = api.df_activities.iloc[offset:offset+limit].to_dict('records')
-
-            return jsonify({
-                'status': 'success',
-                'activities': activities,
-                'total': len(api.df_activities),
-                'limit': limit,
-                'offset': offset
-            }), 200
-
-        except Exception as e:
-            logger.error(f"Error: {e}")
-            return jsonify({'error': str(e)}), 500
-
-    # API: Search and filter activities
-    @app.route('/api/search', methods=['POST'])
-    def search_activities():
-        if not api:
-            return jsonify({'error': 'API not initialized'}), 500
-
-        try:
-            data = request.get_json()
-            query = data.get('query', '')
-            filters = data.get('filters', {})
-            limit = data.get('limit', 50)
-
-            df = api.df_activities.copy()
-
-            # Apply filters
-            if filters.get('min_age') is not None:
-                df = df[df['age_min'] >= filters['min_age']]
-
-            if filters.get('max_age') is not None:
-                df = df[df['age_max'] <= filters['max_age']]
-
-            if filters.get('duration'):
-                duration = int(filters['duration'])
-                df = df[df['duration_mins'] <= duration]
-
-            if filters.get('cost'):
-                df = df[df['cost'].str.lower() == filters['cost'].lower()]
-
-            if filters.get('indoor_outdoor'):
-                location = filters['indoor_outdoor'].lower()
-                df = df[(df['indoor_outdoor'].str.lower() == location) |
-                       (df['indoor_outdoor'].str.lower() == 'both')]
-
-            if filters.get('season'):
-                season = filters['season'].lower()
-                df = df[(df['season'].str.lower() == season) |
-                       (df['season'].str.lower() == 'all')]
-
-            if filters.get('players'):
-                df = df[df['players'] == filters['players']]
-
-            # Text search if query provided
-            if query:
-                query_lower = query.lower()
-                df = df[
-                    df['title'].str.lower().str.contains(query_lower, na=False) |
-                    df['description'].str.lower().str.contains(query_lower, na=False) |
-                    df['tags'].str.lower().str.contains(query_lower, na=False)
-                ]
-
-            # Limit results
-            results = df.head(limit).to_dict('records')
-
-            return jsonify({
-                'status': 'success',
-                'activities': results,
-                'total': len(results)
-            }), 200
-
-        except Exception as e:
-            logger.error(f"Error: {e}")
-            return jsonify({'error': str(e)}), 500
-
-    # API: Get single activity by index
-    @app.route('/api/activity/<int:index>', methods=['GET'])
-    def get_activity(index):
-        if not api:
-            return jsonify({'error': 'API not initialized'}), 500
-
-        try:
-            if index < 0 or index >= len(api.df_activities):
-                return jsonify({'error': 'Activity not found'}), 404
-
-            activity = api.df_activities.iloc[index].to_dict()
-
-            return jsonify({
-                'status': 'success',
-                'activity': activity
-            }), 200
-
-        except Exception as e:
-            logger.error(f"Error: {e}")
-            return jsonify({'error': str(e)}), 500
-
+    
     return app
 
 
