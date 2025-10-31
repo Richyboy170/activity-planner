@@ -49,7 +49,7 @@ async function getPersonalizedRecommendations() {
     const ages = groupMembers.map(m => m.age || 10);
     const minAge = Math.min(...ages);
     const maxAge = Math.max(...ages);
-    const avgAbility = Math.round((groupMembers.reduce((sum, m) => sum + (m.ability || 5), 0) / groupMembers.length) * 10) / 10;
+    const avgAbility = Math.round((groupMembers.reduce((sum, m) => sum + (m.overall_ability || 5), 0) / groupMembers.length) * 10) / 10;
     const allInterests = [...new Set(groupMembers.flatMap(m => m.interests || []))];
     
     currentGroupProfile = {
@@ -68,7 +68,14 @@ async function getPersonalizedRecommendations() {
     try {
         const payload = {
             query: query,
-            group_members: groupMembers.map(m => ({ age: m.age })),
+            group_members: groupMembers.map(m => ({
+                age: m.age,
+                name: m.name,
+                overall_ability: m.overall_ability,
+                interests: m.interests || [],
+                special_needs: m.special_needs || [],
+                allergies: m.allergies || ''
+            })),
             preferences: allInterests,
             top_k: 15
         };
@@ -172,7 +179,7 @@ function populateResultsPage(recommendations) {
             <div class="member-badge">
                 <strong>${member.name || 'Member ' + (i+1)}</strong><br>
                 Age: ${member.age}<br>
-                Ability: ${member.ability || 5}/10
+                Ability: ${member.overall_ability || 5}/10
             </div>
         `;
     });
