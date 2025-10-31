@@ -1497,8 +1497,17 @@ select.form-control {
                     <button class="btn btn--outline btn--sm" id="exportIcsBtn" onclick="exportToICS()">Export ICS</button>
                 </div>
             </div>
-            
-            <div class="calendar-grid">
+
+            <!-- Saved Activities Section -->
+            <div style="margin-bottom: var(--space-32);">
+                <h2 style="margin-bottom: var(--space-16);">Saved Activities</h2>
+                <div id="myPlanActivities" class="activities-grid"></div>
+            </div>
+
+            <!-- Calendar Section -->
+            <div>
+                <h2 style="margin-bottom: var(--space-16);">Calendar</h2>
+                <div class="calendar-grid">
                 <div class="calendar-header">Sunday</div>
                 <div class="calendar-header">Monday</div>
                 <div class="calendar-header">Tuesday</div>
@@ -1551,6 +1560,7 @@ select.form-control {
                 <div class="calendar-day"><div class="day-number">26</div></div>
                 <div class="calendar-day"><div class="day-number">27</div></div>
                 <div class="calendar-day"><div class="day-number">28</div></div>
+            </div>
             </div>
         </div>
     </div>
@@ -3195,6 +3205,10 @@ select.form-control {
                 renderActivities(currentActivities);
             } else if (viewId === 'calendar') {
                 renderCalendar();
+                // Load saved activities from localStorage
+                if (typeof loadMyPlan === 'function') {
+                    loadMyPlan();
+                }
             } else if (viewId === 'my-group') {
                 renderGroupMembers();
             } else if (viewId === 'member-form') {
