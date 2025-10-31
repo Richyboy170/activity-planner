@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <link rel="stylesheet" href="/static/results-page-styles.css">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Family Activity Planner</title>
@@ -1262,6 +1263,7 @@ select.form-control {
     </style>
 </head>
 <body>
+    <div id="main-page">
     <!-- Header Navigation -->
     <header class="app-header">
         <div class="container">
@@ -2562,6 +2564,7 @@ select.form-control {
         let isGuestMode = false;
         let currentFilters = {};
         let groupMembers = [];
+        window.groupMembers = groupMembers;
         let editingMemberId = null;
         let scheduledActivities = []; // Store scheduled activities with dates and times
         
@@ -2815,18 +2818,28 @@ select.form-control {
                 return;
             }
             
-            // Create a new member from template
+            // Create a new member from template with property mapping
+            const memberCount = groupMembers.filter(m => m.name.includes(template.name)).length;
             const newMember = {
                 ...template,
                 id: Date.now(), // New unique ID
-                name: template.name, // Keep template name, user can edit later
+                name: memberCount > 0 ? `${template.name} ${memberCount + 1}` : template.name,
                 bmi: calculateBMI(template.height_cm, template.weight_kg),
-                medical_conditions: ""
+                medical_conditions: "",
+                // Map overall_ability to ability for API compatibility
+                ability: template.overall_ability,
+                physical_ability: template.overall_ability
             };
             
             groupMembers.push(newMember);
-            renderGroupMembers();
             
+            window.groupMembers = groupMembers;
+            
+            console.log('Added template member:', newMember);
+            console.log('Total group members:', groupMembers.length);
+            console.log('Total window.groupMembers:', window.groupMembers.length);
+
+            renderGroupMembers();
         }
 
         // DOM elements
@@ -3061,6 +3074,8 @@ select.form-control {
                 weight_kg: parseFloat(formData.get('weight_kg')),
                 bmi: calculateBMI(parseInt(formData.get('height_cm')), parseFloat(formData.get('weight_kg'))),
                 overall_ability: parseInt(formData.get('overall_ability')),
+                ability: parseInt(formData.get('overall_ability')),
+                physical_ability: parseInt(formData.get('overall_ability')),
                 motor_skills: {
                     fine: parseInt(formData.get('fine_motor')),
                     gross: parseInt(formData.get('gross_motor'))
@@ -3093,11 +3108,25 @@ select.form-control {
             if (editingMemberId) {
                 const index = groupMembers.findIndex(m => m.id === editingMemberId);
                 groupMembers[index] = member;
+                window.groupMembers = groupMembers;
             } else {
                 groupMembers.push(member);
+                window.groupMembers = groupMembers;
             }
             
+            // ADD THESE LINES to refresh the display and show success
             renderGroupMembers();
+            
+            // Reset the form
+            document.getElementById('memberPageForm').reset();
+            
+            // Reset editing state
+            editingMemberId = null;
+            
+            // Show success message
+            alert('Member saved successfully!');
+            
+            // Switch back to My Group view to see the new member
             showView('my-group');
         }
         
@@ -3112,6 +3141,7 @@ select.form-control {
         function removeMember(memberId) {
             if (confirm('Are you sure you want to remove this member?')) {
                 groupMembers = groupMembers.filter(m => m.id !== memberId);
+                window.groupMembers = groupMembers;
                 renderGroupMembers();
             }
         }
@@ -3328,7 +3358,11 @@ select.form-control {
         function startGuestMode() {
             isGuestMode = true;
             isLoggedIn = false;
-            
+            const dashboardElement = document.getElementById('dashboard');
+            if (dashboardElement) {
+                dashboardElement.classList.add('active');
+            }
+            console.log('Guest mode activated');
             // Update UI for guest mode
             loginNavBtn.classList.add('hidden');
             document.getElementById('guestInfo').classList.remove('hidden');
@@ -3433,6 +3467,30 @@ select.form-control {
             renderActivities(filtered);
         }
 
+        // Initialize group members array
+        window.groupMembers = [];
+        
+        // Group member management functions
+        function addGroupMember(memberData) {
+            if (!window.groupMembers) {
+                window.groupMembers = [];
+            }
+            window.groupMembers.push(memberData);
+            console.log('Added member:', memberData);
+            console.log('Total members:', window.groupMembers.length);
+        }
+        
+        function saveMemberFromPage(formData) {
+            const member = {
+                name: formData.get('name'),
+                age: calculateAge(formData.get('date_of_birth')),
+                ability: parseInt(formData.get('physical_ability')) || 5,
+                interests: formData.getAll('interests')
+            };
+            addGroupMember(member);
+            alert('Member added successfully!');
+        }
+        
         // Event listeners
         document.addEventListener('DOMContentLoaded', function() {
             // Navigation
@@ -3620,16 +3678,16 @@ select.form-control {
             
             // BMI auto-calculation for member page form
             function updateBMIPage() {
-                const height = document.querySelector('#member-form input[name="height_cm"]')?.value;
-                const weight = document.querySelector('#member-form input[name="weight_kg"]')?.value;
-                const bmiField = document.querySelector('#member-form input[name="bmi"]');
+                const height = document.querySelector('#memberPageForm input[name="height_cm"]')?.value;
+                const weight = document.querySelector('#memberPageForm input[name="weight_kg"]')?.value;
+                const bmiField = document.querySelector('#memberPageForm input[name="bmi"]');
                 
                 if (height && weight && bmiField) {
                     const bmi = calculateBMI(parseInt(height), parseFloat(weight));
                     bmiField.value = bmi;
                 }
-            }
-            
+            }            
+
             // Range slider value display updates - for main view ranges
             function updateRangeDisplay(rangeInput, displayElement = null) {
                 const value = rangeInput.value;
@@ -3734,5 +3792,7 @@ select.form-control {
             setupMemberFormRangeListeners();
         }
     </script>
+    <script src="/static/api-integration.js"></script>
+    </div>
 </body>
 </html>
