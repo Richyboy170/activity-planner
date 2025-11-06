@@ -405,6 +405,60 @@ def create_app(dataset_path='dataset/dataset.csv', models_dir='models',
             logger.error(f"Error retrieving session: {e}")
             return jsonify({'error': str(e)}), 500
 
+    @app.route('/api/recommend', methods=['POST'])
+    def recommend():
+        """Get personalized recommendations without requiring a session"""
+        if not api:
+            return jsonify({'error': 'API not initialized'}), 500
+
+        try:
+            data = request.get_json()
+            query = data.get('query', '')
+            group_members = data.get('group_members', [])
+            preferences = data.get('preferences', [])
+            top_k = data.get('top_k', 10)
+
+            if not query:
+                return jsonify({'error': 'Search query required'}), 400
+
+            # Generate a temporary session ID for this request
+            session_id = str(uuid.uuid4())
+
+            # Perform AI search with linkage scoring
+            result = api.search_with_linkage(
+                query=query,
+                session_id=session_id,
+                group_members=group_members,
+                preferences=preferences,
+                top_k=top_k
+            )
+
+            # Format response to match expected structure
+            if result['status'] == 'success':
+                # Transform to expected format
+                formatted_recommendations = []
+                for rec in result['recommendations']:
+                    formatted_rec = {
+                        'title': rec.get('title', 'Activity'),
+                        'description': rec.get('description', ''),
+                        'duration_mins': rec.get('duration_mins'),
+                        'cost': rec.get('cost'),
+                        'location': rec.get('location'),
+                        'recommendation_score': rec['scores']['final_score'] if 'scores' in rec else 0.5
+                    }
+                    formatted_recommendations.append(formatted_rec)
+
+                return jsonify({
+                    'status': 'success',
+                    'recommendations': formatted_recommendations
+                }), 200
+            else:
+                return jsonify(result), 500
+
+        except Exception as e:
+            logger.error(f"Recommendation error: {e}", exc_info=True)
+            return jsonify({'error': str(e), 'status': 'error'}), 500
+
     @app.route('/api/search', methods=['POST'])
     def search():
         """AI-powered activity search with linkage scoring"""
