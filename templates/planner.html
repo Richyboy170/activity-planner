@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Activity Planner - AI-Powered Family Activity Search</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .section-title {
+            font-size: 1.5em;
+            color: #333;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .step-number {
+            background: #667eea;
+            color: white;
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #555;
+        }
+
+        input[type="text"],
+        input[type="number"],
+        textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: border-color 0.3s;
+        }
+
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .member-item {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .member-info {
+            flex: 1;
+        }
+
+        .member-name {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .member-age {
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s, transform 0.1s;
+        }
+
+        button:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .btn-remove {
+            background: #ff4757;
+            padding: 8px 16px;
+            font-size: 0.9em;
+        }
+
+        .btn-remove:hover {
+            background: #ee5a6f;
+        }
+
+        .search-box {
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 15px 50px 15px 20px;
+            font-size: 1.1em;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+        }
+
+        .search-btn {
+            position: absolute;
+            right: 5px;
+            top: 5px;
+            bottom: 5px;
+            padding: 0 20px;
+        }
+
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .activity-card {
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 20px;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .activity-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+        }
+
+        .activity-rank {
+            background: #667eea;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+
+        .activity-title {
+            font-size: 1.3em;
+            color: #333;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .activity-meta {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .meta-tag {
+            background: #f0f0f0;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            color: #666;
+        }
+
+        .activity-description {
+            color: #666;
+            margin-bottom: 15px;
+            line-height: 1.6;
+        }
+
+        .score-bars {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .score-item {
+            margin-bottom: 8px;
+        }
+
+        .score-label {
+            font-size: 0.85em;
+            color: #666;
+            margin-bottom: 3px;
+        }
+
+        .score-bar-container {
+            background: #f0f0f0;
+            height: 8px;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .score-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            border-radius: 4px;
+            transition: width 0.5s ease;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .tags-input {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding: 8px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            min-height: 45px;
+        }
+
+        .tag {
+            background: #667eea;
+            color: white;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .tag-remove {
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+        }
+
+        .empty-state-icon {
+            font-size: 4em;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🎯 Activity Planner</h1>
+            <p>AI-Powered Family Activity Search with Smart Linkage Scoring</p>
+        </div>
+
+        <!-- Step 1: Group Members -->
+        <div class="card" id="groupCard">
+            <div class="section-title">
+                <span class="step-number">1</span>
+                <span>Add Your Group Members</span>
+            </div>
+
+            <div class="form-group">
+                <label>Group Name</label>
+                <input type="text" id="groupName" placeholder="e.g., Smith Family" value="My Group">
+            </div>
+
+            <div class="form-group">
+                <label>Member Name</label>
+                <input type="text" id="memberName" placeholder="e.g., Sarah">
+            </div>
+
+            <div class="form-group">
+                <label>Age</label>
+                <input type="number" id="memberAge" placeholder="e.g., 7" min="1" max="100">
+            </div>
+
+            <button onclick="addMember()">Add Member</button>
+
+            <div style="margin-top: 20px;">
+                <h3 style="margin-bottom: 10px;">Group Members:</h3>
+                <div id="membersList"></div>
+            </div>
+
+            <div class="form-group" style="margin-top: 20px;">
+                <label>Preferences (optional tags like "outdoor", "creative", "sports")</label>
+                <input type="text" id="preferencesInput" placeholder="Type and press Enter">
+                <div class="tags-input" id="tagsContainer"></div>
+            </div>
+
+            <button onclick="createSession()" style="margin-top: 20px; width: 100%;">
+                Continue to Search →
+            </button>
+        </div>
+
+        <!-- Step 2: Search (Hidden initially) -->
+        <div class="card hidden" id="searchCard">
+            <div class="section-title">
+                <span class="step-number">2</span>
+                <span>Search Activities</span>
+            </div>
+
+            <div class="search-box">
+                <input
+                    type="text"
+                    class="search-input"
+                    id="searchInput"
+                    placeholder="e.g., fun outdoor activities for kids..."
+                    onkeypress="if(event.key==='Enter') searchActivities()"
+                >
+                <button class="search-btn" onclick="searchActivities()">🔍 Search</button>
+            </div>
+
+            <div id="searchResults"></div>
+        </div>
+    </div>
+
+    <script>
+        let members = [];
+        let preferences = [];
+        let sessionId = null;
+
+        // Add member
+        function addMember() {
+            const name = document.getElementById('memberName').value.trim();
+            const age = parseInt(document.getElementById('memberAge').value);
+
+            if (!name || !age) {
+                alert('Please enter both name and age');
+                return;
+            }
+
+            members.push({ name, age });
+            updateMembersList();
+
+            // Clear inputs
+            document.getElementById('memberName').value = '';
+            document.getElementById('memberAge').value = '';
+        }
+
+        // Update members list display
+        function updateMembersList() {
+            const container = document.getElementById('membersList');
+
+            if (members.length === 0) {
+                container.innerHTML = '<p style="color: #999;">No members yet. Add your first member!</p>';
+                return;
+            }
+
+            container.innerHTML = members.map((member, index) => `
+                <div class="member-item">
+                    <div class="member-info">
+                        <div class="member-name">${member.name}</div>
+                        <div class="member-age">Age: ${member.age} years old</div>
+                    </div>
+                    <button class="btn-remove" onclick="removeMember(${index})">Remove</button>
+                </div>
+            `).join('');
+        }
+
+        // Remove member
+        function removeMember(index) {
+            members.splice(index, 1);
+            updateMembersList();
+        }
+
+        // Preferences/tags handling
+        document.getElementById('preferencesInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                const value = this.value.trim();
+                if (value && !preferences.includes(value)) {
+                    preferences.push(value);
+                    updateTags();
+                    this.value = '';
+                }
+            }
+        });
+
+        function updateTags() {
+            const container = document.getElementById('tagsContainer');
+            container.innerHTML = preferences.map((pref, index) => `
+                <div class="tag">
+                    ${pref}
+                    <span class="tag-remove" onclick="removeTag(${index})">×</span>
+                </div>
+            `).join('');
+        }
+
+        function removeTag(index) {
+            preferences.splice(index, 1);
+            updateTags();
+        }
+
+        // Create session
+        async function createSession() {
+            if (members.length === 0) {
+                alert('Please add at least one group member');
+                return;
+            }
+
+            const groupName = document.getElementById('groupName').value.trim() || 'My Group';
+
+            try {
+                const response = await fetch('/api/session/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        group_name: groupName,
+                        members: members,
+                        preferences: preferences
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    sessionId = data.session_id;
+                    document.getElementById('groupCard').classList.add('hidden');
+                    document.getElementById('searchCard').classList.remove('hidden');
+                    document.getElementById('searchInput').focus();
+                } else {
+                    alert('Error creating session: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to create session. Please try again.');
+            }
+        }
+
+        // Search activities
+        async function searchActivities() {
+            const query = document.getElementById('searchInput').value.trim();
+
+            if (!query) {
+                alert('Please enter a search query');
+                return;
+            }
+
+            if (!sessionId) {
+                alert('Session not found. Please refresh and start over.');
+                return;
+            }
+
+            const resultsContainer = document.getElementById('searchResults');
+            resultsContainer.innerHTML = `
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Searching for perfect activities...</p>
+                </div>
+            `;
+
+            try {
+                const response = await fetch('/api/search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        session_id: sessionId,
+                        query: query,
+                        top_k: 12
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    displayResults(data.recommendations);
+                } else {
+                    resultsContainer.innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-state-icon">❌</div>
+                            <h3>Search Error</h3>
+                            <p>${data.message || 'Unknown error occurred'}</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                resultsContainer.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">⚠️</div>
+                        <h3>Connection Error</h3>
+                        <p>Failed to search. Please try again.</p>
+                    </div>
+                `;
+            }
+        }
+
+        // Display results
+        function displayResults(activities) {
+            const container = document.getElementById('searchResults');
+
+            if (activities.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">🔍</div>
+                        <h3>No Activities Found</h3>
+                        <p>Try a different search query</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = `<div class="results-grid">${activities.map(activity => `
+                <div class="activity-card">
+                    <div style="display: flex; align-items: center; margin-bottom: 10px;">
+                        <span class="activity-rank">${activity.rank}</span>
+                        <h3 class="activity-title" style="margin: 0;">${activity.title}</h3>
+                    </div>
+
+                    <div class="activity-meta">
+                        <span class="meta-tag">👥 ${activity.players || 'Any'}</span>
+                        <span class="meta-tag">⏱️ ${activity.duration_mins} min</span>
+                        <span class="meta-tag">🎂 ${activity.age_min}-${activity.age_max} yrs</span>
+                        <span class="meta-tag">💰 ${activity.cost || 'Free'}</span>
+                        <span class="meta-tag">📍 ${activity.indoor_outdoor || 'Any'}</span>
+                    </div>
+
+                    <div class="activity-description">
+                        <strong>Tags:</strong> ${activity.tags || 'N/A'}
+                    </div>
+
+                    <div class="score-bars">
+                        <div class="score-item">
+                            <div class="score-label">Overall Match: ${(activity.scores.final_score * 100).toFixed(0)}%</div>
+                            <div class="score-bar-container">
+                                <div class="score-bar" style="width: ${activity.scores.final_score * 100}%"></div>
+                            </div>
+                        </div>
+                        <div class="score-item">
+                            <div class="score-label">Semantic Linkage: ${(activity.scores.semantic_linkage * 100).toFixed(0)}%</div>
+                            <div class="score-bar-container">
+                                <div class="score-bar" style="width: ${activity.scores.semantic_linkage * 100}%"></div>
+                            </div>
+                        </div>
+                        <div class="score-item">
+                            <div class="score-label">Age Fit: ${(activity.scores.age_fit_linkage * 100).toFixed(0)}%</div>
+                            <div class="score-bar-container">
+                                <div class="score-bar" style="width: ${activity.scores.age_fit_linkage * 100}%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('')}</div>`;
+        }
+
+        // Initialize
+        updateMembersList();
+    </script>
+</body>
+</html>
