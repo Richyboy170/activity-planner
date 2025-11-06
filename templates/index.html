@@ -3146,38 +3146,8 @@ select.form-control {
             }
         }
         
-        function getPersonalizedRecommendations() {
-            if (groupMembers.length === 0) {
-                alert('Please add group members first to get personalized recommendations.');
-                return;
-            }
-            
-            // Show personalized filtering demo
-            const ages = groupMembers.map(m => m.age);
-            const minAge = Math.min(...ages);
-            const maxAge = Math.max(...ages);
-            const avgAbility = groupMembers.reduce((sum, m) => sum + m.overall_ability, 0) / groupMembers.length;
-            const allSpecialNeeds = [...new Set(groupMembers.flatMap(m => m.special_needs))];
-            const allAllergies = [...new Set(groupMembers.map(m => m.allergies).filter(a => a))];
-            const allInterests = [...new Set(groupMembers.flatMap(m => m.interests))];
-            
-            let message = `\ud83e\udd16 ML Recommendation System Analysis:\n\n`;
-            message += `👶 Age filtering: Activities suitable for ages ${minAge}-${maxAge}\n`;
-            message += `💪 Ability matching: Targeting ${getAbilityLevelText(Math.round(avgAbility))} level (${Math.round(avgAbility)}/10)\n`;
-            
-            if (allSpecialNeeds.length > 0) {
-                message += `⚕️ Special needs considered: ${allSpecialNeeds.join(', ')}\n`;
-            }
-            
-            if (allAllergies.length > 0) {
-                message += `⚠️ Allergy filters: Excluding activities with ${allAllergies.join(', ')}\n`;
-            }
-            
-            message += `🎯 Interest boost: Prioritizing ${allInterests.slice(0, 3).join(', ')} activities\n\n`;
-            message += `Found 12 personalized activity recommendations! (This would show filtered and ranked results)`;
-            
-            alert(message);
-        }
+        // Note: getPersonalizedRecommendations() is now defined in api-integration.js
+        // This function has been removed to prevent override of the real API integration
         
         // Navigation
         function showView(viewId) {
