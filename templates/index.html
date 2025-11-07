@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <link rel="stylesheet" href="/static/results-page-styles.css">
+    <link rel="stylesheet" href="/static/planner-styles.css">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Family Activity Planner</title>
@@ -1663,71 +1664,45 @@ select.form-control {
         </div>
     </div>
 
-    <!-- Calendar View -->
+    <!-- Calendar View - Dynamic Planner -->
     <div id="calendar" class="view">
-        <div class="container">
-            <div class="flex justify-between items-center" style="margin-bottom: var(--space-24);">
-                <h1>My Activity Plan</h1>
-                <div class="flex gap-8">
-                    <button class="btn btn--outline btn--sm" id="exportPdfBtn" onclick="exportToPDF()">Export PDF</button>
-                    <button class="btn btn--outline btn--sm" id="exportCsvBtn" onclick="exportToCSV()">Export CSV</button>
-                    <button class="btn btn--outline btn--sm" id="exportIcsBtn" onclick="exportToICS()">Export ICS</button>
+        <div class="planner-container">
+            <div class="planner-header">
+                <h1>
+                    📅 My Activity Plan
+                    <span id="plannedActivitiesCount" class="planner-count-badge" style="display: none;">0</span>
+                </h1>
+                <div class="planner-actions">
+                    <button class="btn btn--outline btn--sm" onclick="window.exportPlannedActivitiesToICS()">
+                        📥 Export to Calendar
+                    </button>
+                    <button class="btn btn--primary btn--sm" onclick="showView('search')">
+                        ➕ Find More Activities
+                    </button>
                 </div>
             </div>
-            
-            <div class="calendar-grid">
-                <div class="calendar-header">Sunday</div>
-                <div class="calendar-header">Monday</div>
-                <div class="calendar-header">Tuesday</div>
-                <div class="calendar-header">Wednesday</div>
-                <div class="calendar-header">Thursday</div>
-                <div class="calendar-header">Friday</div>
-                <div class="calendar-header">Saturday</div>
-                
-                <!-- Sample calendar days -->
-                <div class="calendar-day">
-                    <div class="day-number">15</div>
-                    <div class="day-activities">
-                        <div class="calendar-activity">Nature Hunt (2 PM)</div>
-                    </div>
+
+            <!-- Instructions -->
+            <div style="margin-bottom: 20px; padding: 15px; background: rgba(33, 128, 141, 0.05); border-radius: 8px; border-left: 4px solid var(--color-primary);">
+                <p style="margin: 0; font-size: 14px; color: var(--color-text-secondary);">
+                    <strong>💡 How it works:</strong> Search for activities and click "Add to Plan".
+                    Then drag activities between days and click the edit icon to change times.
+                    Your plan is saved automatically!
+                </p>
+            </div>
+
+            <!-- Calendar Grid -->
+            <div id="plannerCalendarGrid">
+                <!-- Empty state (shown when no activities) -->
+                <div class="planner-empty-state">
+                    <div class="planner-empty-state-icon">📅</div>
+                    <h3>Your activity plan is empty</h3>
+                    <p>Start by searching for activities and clicking "Add to Plan" on activities you like.
+                    They'll appear here where you can drag them to different days and edit times.</p>
+                    <button class="btn btn--primary" style="margin-top: 20px;" onclick="showView('search')">
+                        Browse Activities
+                    </button>
                 </div>
-                <div class="calendar-day">
-                    <div class="day-number">16</div>
-                </div>
-                <div class="calendar-day">
-                    <div class="day-number">17</div>
-                    <div class="day-activities">
-                        <div class="calendar-activity">Art Gallery (10 AM)</div>
-                        <div class="calendar-activity">Kitchen Science (3 PM)</div>
-                    </div>
-                </div>
-                <div class="calendar-day">
-                    <div class="day-number">18</div>
-                </div>
-                <div class="calendar-day">
-                    <div class="day-number">19</div>
-                    <div class="day-activities">
-                        <div class="calendar-activity">Obstacle Course (11 AM)</div>
-                    </div>
-                </div>
-                <div class="calendar-day">
-                    <div class="day-number">20</div>
-                </div>
-                <div class="calendar-day">
-                    <div class="day-number">21</div>
-                    <div class="day-activities">
-                        <div class="calendar-activity">Backyard Camping (6 PM)</div>
-                    </div>
-                </div>
-                
-                <!-- Add more days as needed -->
-                <div class="calendar-day"><div class="day-number">22</div></div>
-                <div class="calendar-day"><div class="day-number">23</div></div>
-                <div class="calendar-day"><div class="day-number">24</div></div>
-                <div class="calendar-day"><div class="day-number">25</div></div>
-                <div class="calendar-day"><div class="day-number">26</div></div>
-                <div class="calendar-day"><div class="day-number">27</div></div>
-                <div class="calendar-day"><div class="day-number">28</div></div>
             </div>
         </div>
     </div>
@@ -3352,7 +3327,10 @@ select.form-control {
             } else if (viewId === 'search') {
                 renderActivities(currentActivities);
             } else if (viewId === 'calendar') {
-                renderCalendar();
+                // Render the dynamic planner calendar
+                if (window.renderPlannerCalendar) {
+                    window.renderPlannerCalendar();
+                }
             } else if (viewId === 'my-group') {
                 renderGroupMembers();
             } else if (viewId === 'member-form') {
@@ -4012,6 +3990,7 @@ select.form-control {
         }
     </script>
     <script src="/static/api-integration.js"></script>
+    <script src="/static/planner.js"></script>
 
     <!-- Activity Detail Modal -->
     <div class="activity-modal" id="activityModal">

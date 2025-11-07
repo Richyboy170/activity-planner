@@ -168,11 +168,16 @@ function createResultsPageContainer() {
 // Populate Results
 function populateResultsPage(recommendations) {
     console.log('Populating results page with', recommendations.length, 'recommendations');
-    
+
+    // Store recommendations for planner
+    if (window.updateCurrentSearchResults) {
+        window.updateCurrentSearchResults(recommendations);
+    }
+
     // Show group profile
     const profileDiv = document.getElementById('group-profile');
     const profile = currentGroupProfile;
-    
+
     let membersList = '<div class="members-list">';
     profile.members.forEach((member, i) => {
         membersList += `
@@ -184,7 +189,7 @@ function populateResultsPage(recommendations) {
         `;
     });
     membersList += '</div>';
-    
+
     profileDiv.innerHTML = `
         <div class="profile-stats">
             <div class="stat">
@@ -201,18 +206,27 @@ function populateResultsPage(recommendations) {
             </div>
         </div>
         ${membersList}
+        <div style="margin-top: 15px; padding: 10px; background: rgba(33, 128, 141, 0.1); border-radius: 8px; border-left: 4px solid var(--color-primary);">
+            <strong>🔍 Using "My Group" Data</strong><br>
+            <span style="font-size: 12px; color: var(--color-text-secondary);">
+                These recommendations are personalized for your group members above
+            </span>
+        </div>
     `;
-    
+
     // Show recommendations
     const recList = document.getElementById('recommendations-list');
     recList.innerHTML = '';
-    
+
     recommendations.forEach((rec, index) => {
         const card = document.createElement('div');
         card.className = 'recommendation-card';
         card.style.cursor = 'pointer';
 
         const scorePercent = Math.round((rec.recommendation_score || 0) * 100);
+
+        // Normalize indoor_outdoor
+        const indoorOutdoorText = normalizeIndoorOutdoor(rec.indoor_outdoor);
 
         card.innerHTML = `
             <div class="card-header">
@@ -223,12 +237,17 @@ function populateResultsPage(recommendations) {
             </div>
             <div class="card-content">
                 <h3>${rec.title || 'Activity'}</h3>
-                <p>${rec.description || 'No description'}</p>
+                <p>${(rec.description || rec.how_to_play || 'No description').substring(0, 150)}${(rec.description || rec.how_to_play || '').length > 150 ? '...' : ''}</p>
                 <div class="activity-details">
-                    ${rec.duration_mins ? 'Duration: ' + rec.duration_mins + ' mins<br>' : ''}
-                    ${rec.cost ? 'Cost: ' + rec.cost + '<br>' : ''}
-                    ${rec.location ? 'Location: ' + rec.location + '<br>' : ''}
+                    ${rec.duration_mins ? '⏱️ ' + rec.duration_mins + ' mins' : ''}
+                    ${rec.cost ? ' • 💰 ' + rec.cost : ''}
+                    ${indoorOutdoorText ? ' • 📍 ' + indoorOutdoorText : ''}
                 </div>
+            </div>
+            <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(0,0,0,0.1);">
+                <button class="btn btn--primary btn--sm" onclick="event.stopPropagation(); window.addToPlan(${JSON.stringify(rec).replace(/"/g, '&quot;')})">
+                    📅 Add to Plan
+                </button>
             </div>
         `;
 
@@ -341,11 +360,17 @@ function displayActivityDetails(activity) {
         </div>
 
         <div class="modal-section">
-            <h3>Description</h3>
-            <p>${activity.description || 'No description available.'}</p>
+            <button class="btn btn--primary btn--full-width" onclick="window.addToPlan(${JSON.stringify(activity).replace(/"/g, '&quot;')}); closeActivityModal();" style="margin-bottom: 20px;">
+                📅 Add to My Plan
+            </button>
         </div>
 
-        ${activity.how_to_play ? `
+        <div class="modal-section">
+            <h3>Description</h3>
+            <p>${activity.description || activity.how_to_play || 'No description available.'}</p>
+        </div>
+
+        ${activity.how_to_play && activity.how_to_play !== activity.description ? `
             <div class="modal-section">
                 <h3>How to Play / Instructions</h3>
                 <p>${activity.how_to_play}</p>
