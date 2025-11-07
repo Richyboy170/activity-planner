@@ -454,6 +454,63 @@
             font-weight: 600;
             color: #333;
         }
+
+        /* Filter styles */
+        .filters-container {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .filter-group {
+            margin-bottom: 15px;
+        }
+
+        .filter-label {
+            font-weight: 600;
+            color: #555;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .filter-buttons {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            background: white;
+            border: 2px solid #e0e0e0;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .filter-btn:hover {
+            background: #f0f0f0;
+        }
+
+        .filter-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .btn-clear-filters {
+            background: #ff4757;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 0.9em;
+        }
+
+        .btn-clear-filters:hover {
+            background: #ee5a6f;
+        }
     </style>
 </head>
 <body>
@@ -522,6 +579,55 @@
                 <button class="search-btn" onclick="searchActivities()">🔍 Search</button>
             </div>
 
+            <!-- Filter Buttons -->
+            <div class="filters-container" id="filtersContainer" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3 style="margin: 0; color: #333;">Filter Activities</h3>
+                    <button class="btn-clear-filters" onclick="clearAllFilters()">Clear Filters</button>
+                </div>
+
+                <div class="filter-group">
+                    <label class="filter-label">Location:</label>
+                    <div class="filter-buttons">
+                        <button class="filter-btn active" data-filter="location" data-value="all" onclick="setFilter('location', 'all', this)">All</button>
+                        <button class="filter-btn" data-filter="location" data-value="indoor" onclick="setFilter('location', 'indoor', this)">Indoor</button>
+                        <button class="filter-btn" data-filter="location" data-value="outdoor" onclick="setFilter('location', 'outdoor', this)">Outdoor</button>
+                        <button class="filter-btn" data-filter="location" data-value="both" onclick="setFilter('location', 'both', this)">Both</button>
+                    </div>
+                </div>
+
+                <div class="filter-group">
+                    <label class="filter-label">Cost:</label>
+                    <div class="filter-buttons">
+                        <button class="filter-btn active" data-filter="cost" data-value="all" onclick="setFilter('cost', 'all', this)">All</button>
+                        <button class="filter-btn" data-filter="cost" data-value="free" onclick="setFilter('cost', 'free', this)">Free</button>
+                        <button class="filter-btn" data-filter="cost" data-value="low" onclick="setFilter('cost', 'low', this)">Low</button>
+                        <button class="filter-btn" data-filter="cost" data-value="medium" onclick="setFilter('cost', 'medium', this)">Medium</button>
+                    </div>
+                </div>
+
+                <div class="filter-group">
+                    <label class="filter-label">Duration:</label>
+                    <div class="filter-buttons">
+                        <button class="filter-btn active" data-filter="duration" data-value="all" onclick="setFilter('duration', 'all', this)">All</button>
+                        <button class="filter-btn" data-filter="duration" data-value="short" onclick="setFilter('duration', 'short', this)">Short (0-15 min)</button>
+                        <button class="filter-btn" data-filter="duration" data-value="medium" onclick="setFilter('duration', 'medium', this)">Medium (15-45 min)</button>
+                        <button class="filter-btn" data-filter="duration" data-value="long" onclick="setFilter('duration', 'long', this)">Long (45+ min)</button>
+                    </div>
+                </div>
+
+                <div class="filter-group">
+                    <label class="filter-label">Age Range:</label>
+                    <div class="filter-buttons">
+                        <button class="filter-btn active" data-filter="age" data-value="all" onclick="setFilter('age', 'all', this)">All Ages</button>
+                        <button class="filter-btn" data-filter="age" data-value="toddler" onclick="setFilter('age', 'toddler', this)">Toddler (2-4)</button>
+                        <button class="filter-btn" data-filter="age" data-value="preschool" onclick="setFilter('age', 'preschool', this)">Preschool (4-6)</button>
+                        <button class="filter-btn" data-filter="age" data-value="elementary" onclick="setFilter('age', 'elementary', this)">Elementary (6-12)</button>
+                        <button class="filter-btn" data-filter="age" data-value="teen" onclick="setFilter('age', 'teen', this)">Teen (12+)</button>
+                    </div>
+                </div>
+            </div>
+
             <div id="searchResults"></div>
         </div>
     </div>
@@ -530,6 +636,13 @@
         let members = [];
         let preferences = [];
         let sessionId = null;
+        let allActivities = [];  // Store all search results
+        let activeFilters = {
+            location: 'all',
+            cost: 'all',
+            duration: 'all',
+            age: 'all'
+        };
 
         // Helper function to normalize indoor_outdoor display
         function normalizeIndoorOutdoor(value) {
@@ -693,6 +806,8 @@
                             preference_linkage: 0.5
                         }
                     }));
+                    allActivities = rankedRecommendations; // Store for filtering
+                    document.getElementById('filtersContainer').style.display = 'block'; // Show filters
                     displayResults(rankedRecommendations);
                 } else {
                     resultsContainer.innerHTML = `
@@ -927,6 +1042,91 @@
                 closeActivityModal();
             }
         });
+
+        // Filter functions
+        function setFilter(filterType, value, buttonElement) {
+            // Update active filter
+            activeFilters[filterType] = value;
+
+            // Update button states
+            const filterGroup = buttonElement.closest('.filter-group');
+            filterGroup.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+            buttonElement.classList.add('active');
+
+            // Apply filters
+            applyFilters();
+        }
+
+        function applyFilters() {
+            if (allActivities.length === 0) return;
+
+            let filtered = allActivities.filter(activity => {
+                // Location filter
+                if (activeFilters.location !== 'all') {
+                    const location = (activity.indoor_outdoor || '').toLowerCase();
+                    if (activeFilters.location === 'indoor' && location !== 'indoor') return false;
+                    if (activeFilters.location === 'outdoor' && location !== 'outdoor') return false;
+                    if (activeFilters.location === 'both' && location !== 'both') return false;
+                }
+
+                // Cost filter
+                if (activeFilters.cost !== 'all') {
+                    const cost = (activity.cost || 'free').toLowerCase();
+                    if (activeFilters.cost === 'free' && cost !== 'free') return false;
+                    if (activeFilters.cost === 'low' && cost !== 'low') return false;
+                    if (activeFilters.cost === 'medium' && cost !== 'medium') return false;
+                }
+
+                // Duration filter
+                if (activeFilters.duration !== 'all') {
+                    const duration = activity.duration_mins || 0;
+                    if (activeFilters.duration === 'short' && duration > 15) return false;
+                    if (activeFilters.duration === 'medium' && (duration <= 15 || duration > 45)) return false;
+                    if (activeFilters.duration === 'long' && duration <= 45) return false;
+                }
+
+                // Age filter
+                if (activeFilters.age !== 'all') {
+                    const ageMin = activity.age_min || 0;
+                    const ageMax = activity.age_max || 100;
+                    if (activeFilters.age === 'toddler' && (ageMin > 4 || ageMax < 2)) return false;
+                    if (activeFilters.age === 'preschool' && (ageMin > 6 || ageMax < 4)) return false;
+                    if (activeFilters.age === 'elementary' && (ageMin > 12 || ageMax < 6)) return false;
+                    if (activeFilters.age === 'teen' && ageMin < 12) return false;
+                }
+
+                return true;
+            });
+
+            // Re-rank filtered results
+            filtered = filtered.map((activity, index) => ({
+                ...activity,
+                rank: index + 1
+            }));
+
+            displayResults(filtered);
+        }
+
+        function clearAllFilters() {
+            // Reset all filters to 'all'
+            activeFilters = {
+                location: 'all',
+                cost: 'all',
+                duration: 'all',
+                age: 'all'
+            };
+
+            // Reset all button states
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.value === 'all') {
+                    btn.classList.add('active');
+                }
+            });
+
+            // Show all activities
+            applyFilters();
+        }
 
         // Initialize
         updateMembersList();

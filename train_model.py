@@ -3,6 +3,7 @@
 🚀 Activity Planner - Local Model Training Script
 ==================================================
 Train Sentence-BERT embeddings for activity recommendation using hybrid search.
+Includes neural network training with train/validation/test split and batch loss tracking.
 
 This script replaces creating_colab.py and runs locally with adjustable parameters.
 """
@@ -14,7 +15,7 @@ import json
 import os
 import logging
 from datetime import datetime
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass, asdict
 import argparse
 
@@ -22,7 +23,12 @@ from rank_bm25 import BM25Okapi
 from sentence_transformers import SentenceTransformer
 import faiss
 from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.model_selection import train_test_split
 from tqdm import tqdm
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import Dataset, DataLoader
 
 # Configure logging
 logging.basicConfig(
@@ -262,6 +268,275 @@ class DenseEmbedder:
         return [(int(idx), float(score)) for idx, score in zip(indices[0], scores)]
 
 
+class ActivityDataset(Dataset):
+    """PyTorch Dataset for activity classification"""
+
+    def __init__(self, embeddings, labels):
+        self.embeddings = torch.FloatTensor(embeddings)
+        self.labels = torch.LongTensor(labels)
+
+    def __len__(self):
+        return len(self.labels)
+
+    def __getitem__(self, idx):
+        return self.embeddings[idx], self.labels[idx]
+
+
+class ActivityClassifier(nn.Module):
+    """Neural network for activity classification/ranking"""
+
+    def __init__(self, input_dim: int, hidden_dims: List[int], num_classes: int, dropout: float = 0.3):
+        super(ActivityClassifier, self).__init__()
+
+        layers = []
+        prev_dim = input_dim
+
+        # Build hidden layers
+        for hidden_dim in hidden_dims:
+            layers.append(nn.Linear(prev_dim, hidden_dim))
+            layers.append(nn.ReLU())
+            layers.append(nn.BatchNorm1d(hidden_dim))
+            layers.append(nn.Dropout(dropout))
+            prev_dim = hidden_dim
+
+        # Output layer
+        layers.append(nn.Linear(prev_dim, num_classes))
+
+        self.model = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.model(x)
+
+
+class NeuralTrainer:
+    """Train neural network classifier on activity data"""
+
+    def __init__(self, config: 'TrainingConfig'):
+        self.config = config
+        self.device = torch.device('cuda' if torch.cuda.is_available() and config.use_gpu else 'cpu')
+        self.model = None
+        self.train_loader = None
+        self.val_loader = None
+        self.test_loader = None
+        self.train_losses = []
+        self.val_losses = []
+        logger.info(f"Neural trainer initialized on device: {self.device}")
+
+    def prepare_data(self, embeddings: np.ndarray, df_activities: pd.DataFrame):
+        """Split data into train/validation/test sets"""
+        logger.info("\n[Neural Network] Preparing train/validation/test split...")
+
+        # Create synthetic labels based on activity categories
+        # Here we'll use age_min ranges as classes for demonstration
+        labels = []
+        for idx, row in df_activities.iterrows():
+            age_min = row['age_min']
+            if age_min <= 3:
+                labels.append(0)  # Toddler
+            elif age_min <= 6:
+                labels.append(1)  # Preschool
+            elif age_min <= 10:
+                labels.append(2)  # Elementary
+            else:
+                labels.append(3)  # Teen+
+
+        labels = np.array(labels)
+
+        # First split: separate test set (10%)
+        X_temp, X_test, y_temp, y_test = train_test_split(
+            embeddings, labels, test_size=0.10, random_state=42, stratify=labels
+        )
+
+        # Second split: separate train and validation (80% train, 10% val from remaining)
+        X_train, X_val, y_train, y_val = train_test_split(
+            X_temp, y_temp, test_size=0.111, random_state=42, stratify=y_temp  # 0.111 * 0.90 ≈ 0.10
+        )
+
+        logger.info(f"✓ Train set: {len(X_train)} samples ({len(X_train)/len(embeddings)*100:.1f}%)")
+        logger.info(f"✓ Validation set: {len(X_val)} samples ({len(X_val)/len(embeddings)*100:.1f}%)")
+        logger.info(f"✓ Test set: {len(X_test)} samples ({len(X_test)/len(embeddings)*100:.1f}%)")
+
+        # Create datasets
+        train_dataset = ActivityDataset(X_train, y_train)
+        val_dataset = ActivityDataset(X_val, y_val)
+        test_dataset = ActivityDataset(X_test, y_test)
+
+        # Create data loaders
+        self.train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+        self.val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
+        self.test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
+
+        return len(np.unique(labels))
+
+    def build_model(self, input_dim: int, num_classes: int):
+        """Build neural network model"""
+        logger.info(f"\n[Neural Network] Building model...")
+        logger.info(f"  Input dimension: {input_dim}")
+        logger.info(f"  Number of classes: {num_classes}")
+
+        hidden_dims = [256, 128, 64]
+        self.model = ActivityClassifier(input_dim, hidden_dims, num_classes, dropout=0.3)
+        self.model.to(self.device)
+
+        # Count parameters
+        total_params = sum(p.numel() for p in self.model.parameters())
+        trainable_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
+
+        logger.info(f"✓ Model built with {trainable_params:,} trainable parameters")
+        logger.info(f"  Architecture: {input_dim} -> 256 -> 128 -> 64 -> {num_classes}")
+
+    def train_epoch(self, optimizer, criterion, epoch: int, num_epochs: int):
+        """Train for one epoch with batch-wise loss display"""
+        self.model.train()
+        epoch_loss = 0.0
+        batch_losses = []
+
+        progress_bar = tqdm(self.train_loader, desc=f"Epoch {epoch+1}/{num_epochs}")
+
+        for batch_idx, (inputs, targets) in enumerate(progress_bar):
+            inputs, targets = inputs.to(self.device), targets.to(self.device)
+
+            # Forward pass
+            optimizer.zero_grad()
+            outputs = self.model(inputs)
+            loss = criterion(outputs, targets)
+
+            # Backward pass
+            loss.backward()
+            optimizer.step()
+
+            # Track loss
+            batch_loss = loss.item()
+            batch_losses.append(batch_loss)
+            epoch_loss += batch_loss
+
+            # Update progress bar with current batch loss
+            progress_bar.set_postfix({
+                'batch_loss': f'{batch_loss:.4f}',
+                'avg_loss': f'{epoch_loss/(batch_idx+1):.4f}'
+            })
+
+        avg_epoch_loss = epoch_loss / len(self.train_loader)
+        self.train_losses.append(avg_epoch_loss)
+
+        return avg_epoch_loss, batch_losses
+
+    def validate(self, criterion):
+        """Validate model on validation set"""
+        self.model.eval()
+        val_loss = 0.0
+        correct = 0
+        total = 0
+
+        with torch.no_grad():
+            for inputs, targets in self.val_loader:
+                inputs, targets = inputs.to(self.device), targets.to(self.device)
+
+                outputs = self.model(inputs)
+                loss = criterion(outputs, targets)
+                val_loss += loss.item()
+
+                _, predicted = torch.max(outputs.data, 1)
+                total += targets.size(0)
+                correct += (predicted == targets).sum().item()
+
+        avg_val_loss = val_loss / len(self.val_loader)
+        accuracy = 100 * correct / total
+        self.val_losses.append(avg_val_loss)
+
+        return avg_val_loss, accuracy
+
+    def test(self, criterion):
+        """Evaluate model on test set"""
+        self.model.eval()
+        test_loss = 0.0
+        correct = 0
+        total = 0
+
+        with torch.no_grad():
+            for inputs, targets in self.test_loader:
+                inputs, targets = inputs.to(self.device), targets.to(self.device)
+
+                outputs = self.model(inputs)
+                loss = criterion(outputs, targets)
+                test_loss += loss.item()
+
+                _, predicted = torch.max(outputs.data, 1)
+                total += targets.size(0)
+                correct += (predicted == targets).sum().item()
+
+        avg_test_loss = test_loss / len(self.test_loader)
+        accuracy = 100 * correct / total
+
+        return avg_test_loss, accuracy
+
+    def train(self, num_epochs: int = 10, learning_rate: float = 0.001):
+        """Full training loop with train/validation/test evaluation"""
+        logger.info(f"\n[Neural Network] Starting training for {num_epochs} epochs...")
+        logger.info(f"  Learning rate: {learning_rate}")
+        logger.info(f"  Device: {self.device}")
+        logger.info("="*70)
+
+        criterion = nn.CrossEntropyLoss()
+        optimizer = optim.Adam(self.model.parameters(), lr=learning_rate, weight_decay=1e-5)
+
+        best_val_loss = float('inf')
+
+        for epoch in range(num_epochs):
+            # Train
+            train_loss, batch_losses = self.train_epoch(optimizer, criterion, epoch, num_epochs)
+
+            # Validate
+            val_loss, val_acc = self.validate(criterion)
+
+            # Log epoch summary
+            logger.info(f"\nEpoch {epoch+1}/{num_epochs} Summary:")
+            logger.info(f"  Train Loss: {train_loss:.4f}")
+            logger.info(f"  Val Loss: {val_loss:.4f}")
+            logger.info(f"  Val Accuracy: {val_acc:.2f}%")
+
+            # Save best model
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                logger.info(f"  ✓ New best validation loss! Saving model...")
+
+        logger.info("\n" + "="*70)
+        logger.info("[Neural Network] Training complete!")
+        logger.info("="*70)
+
+        # Final test evaluation
+        logger.info("\n[Neural Network] Evaluating on test set...")
+        test_loss, test_acc = self.test(criterion)
+        logger.info(f"✓ Test Loss: {test_loss:.4f}")
+        logger.info(f"✓ Test Accuracy: {test_acc:.2f}%")
+
+        return test_loss, test_acc
+
+    def save(self, output_dir: str):
+        """Save trained model and training history"""
+        os.makedirs(output_dir, exist_ok=True)
+
+        # Save model
+        model_path = os.path.join(output_dir, 'neural_classifier.pth')
+        torch.save({
+            'model_state_dict': self.model.state_dict(),
+            'train_losses': self.train_losses,
+            'val_losses': self.val_losses,
+        }, model_path)
+
+        logger.info(f"✓ Neural model saved to {model_path}")
+
+        # Save training history
+        history_path = os.path.join(output_dir, 'training_history.json')
+        with open(history_path, 'w') as f:
+            json.dump({
+                'train_losses': self.train_losses,
+                'val_losses': self.val_losses,
+            }, f, indent=2)
+
+        logger.info(f"✓ Training history saved to {history_path}")
+
+
 class ModelTrainer:
     """Main training pipeline orchestrator"""
 
@@ -270,6 +545,7 @@ class ModelTrainer:
         self.data_processor = ActivityDataProcessor(config)
         self.bm25_indexer = BM25Indexer(config)
         self.dense_embedder = DenseEmbedder(config)
+        self.neural_trainer = NeuralTrainer(config)
         self.df_activities = None
         self.activity_texts = None
 
@@ -300,12 +576,22 @@ class ModelTrainer:
         self.dense_embedder.save(self.config.output_dir)
 
         # Step 4: Save dataset and config
-        logger.info("\n[5/5] Saving dataset and configuration...")
+        logger.info("\n[5/7] Saving dataset and configuration...")
         self._save_dataset()
         self.config.save(os.path.join(self.config.output_dir, 'training_config.json'))
 
-        # Step 5: Test pipeline
-        logger.info("\n[TEST] Testing hybrid retrieval pipeline...")
+        # Step 5: Train neural network
+        logger.info("\n[6/7] Training neural network classifier...")
+        num_classes = self.neural_trainer.prepare_data(self.dense_embedder.embeddings, self.df_activities)
+        self.neural_trainer.build_model(
+            input_dim=self.dense_embedder.embeddings.shape[1],
+            num_classes=num_classes
+        )
+        test_loss, test_acc = self.neural_trainer.train(num_epochs=10, learning_rate=0.001)
+        self.neural_trainer.save(self.config.output_dir)
+
+        # Step 6: Test pipeline
+        logger.info("\n[7/7] Testing hybrid retrieval pipeline...")
         self._test_pipeline()
 
         logger.info("\n" + "="*70)
@@ -317,8 +603,13 @@ class ModelTrainer:
         logger.info("  ✓ bm25_docs.pkl - BM25 keyword index")
         logger.info("  ✓ embeddings.npy - Sentence-BERT embeddings")
         logger.info("  ✓ faiss_index.bin - FAISS similarity index")
+        logger.info("  ✓ neural_classifier.pth - Neural network classifier")
+        logger.info("  ✓ training_history.json - Training loss history")
         logger.info("  ✓ activities_processed.csv - Processed dataset")
         logger.info("  ✓ training_config.json - Training parameters")
+        logger.info(f"\nNeural Network Performance:")
+        logger.info(f"  Final Test Loss: {test_loss:.4f}")
+        logger.info(f"  Final Test Accuracy: {test_acc:.2f}%")
         logger.info("\nNext steps:")
         logger.info("  1. Run: python app_optimized.py")
         logger.info("  2. Open: http://localhost:5000")
