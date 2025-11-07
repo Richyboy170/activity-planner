@@ -37,7 +37,8 @@ from train_model import (
     ActivityClassifier,
     ActivityDataProcessor,
     DenseEmbedder,
-    ActivityDataset
+    ActivityDataset,
+    TrainingConfig
 )
 
 
@@ -115,12 +116,16 @@ class ModelTester:
         """Load dataset and prepare train/val/test splits with embeddings."""
         print("Loading and preparing data...")
 
+        # Create config with the dataset path
+        config = TrainingConfig(dataset_path=self.data_path)
+
         # Load dataset
-        processor = ActivityDataProcessor(self.data_path)
-        df = processor.df
+        processor = ActivityDataProcessor(config)
+        df = processor.load_dataset()
 
         # Generate embeddings
-        embedder = DenseEmbedder()
+        embedder = DenseEmbedder(config)
+        embedder.load_model()
         texts = processor.create_text_representations()
         embeddings = embedder.generate_embeddings(texts)
 
@@ -135,7 +140,7 @@ class ModelTester:
             else:
                 return 3  # Teen+
 
-        labels = df['min_age'].apply(get_age_group).values
+        labels = df['age_min'].apply(get_age_group).values
 
         # Split data (80/10/10)
         n = len(embeddings)
