@@ -210,9 +210,10 @@ function populateResultsPage(recommendations) {
     recommendations.forEach((rec, index) => {
         const card = document.createElement('div');
         card.className = 'recommendation-card';
-        
+        card.style.cursor = 'pointer';
+
         const scorePercent = Math.round((rec.recommendation_score || 0) * 100);
-        
+
         card.innerHTML = `
             <div class="card-header">
                 <div class="rank-badge">#${index + 1}</div>
@@ -230,7 +231,12 @@ function populateResultsPage(recommendations) {
                 </div>
             </div>
         `;
-        
+
+        // Make card clickable to view details
+        card.addEventListener('click', () => {
+            viewActivityDetails(rec.id, rec.title);
+        });
+
         recList.appendChild(card);
     });
 }
@@ -259,6 +265,153 @@ function hideResultsPage() {
     
     window.scrollTo(0, 0);
 }
+
+// View activity details - triggered on card click
+async function viewActivityDetails(activityId, activityTitle) {
+    const modal = document.getElementById('activityModal');
+    const modalBody = document.getElementById('modalBody');
+
+    if (!modal || !modalBody) {
+        console.error('Modal elements not found');
+        return;
+    }
+
+    // Show modal with loading state
+    modal.classList.add('active');
+    modalBody.innerHTML = `
+        <div class="loading">
+            <div class="spinner"></div>
+            <p>Loading activity details...</p>
+        </div>
+    `;
+
+    try {
+        const response = await fetch(`/api/activity/${activityId}`);
+        const data = await response.json();
+
+        if (data.status === 'success' && data.activity) {
+            displayActivityDetails(data.activity);
+        } else {
+            modalBody.innerHTML = `<div class="empty-state">Error loading details...</div>`;
+        }
+    } catch (error) {
+        console.error('Error fetching activity details:', error);
+        modalBody.innerHTML = `<div class="empty-state">Connection Error</div>`;
+    }
+}
+
+// Display activity details in modal
+function displayActivityDetails(activity) {
+    const modalBody = document.getElementById('modalBody');
+
+    // Parse materials if it's a string
+    let materials = activity.materials_needed;
+    if (typeof materials === 'string') {
+        materials = materials.split(',').map(m => m.trim());
+    }
+
+    // Parse tags if it's a string
+    let tags = activity.tags;
+    if (typeof tags === 'string') {
+        tags = tags.split(',').map(t => t.trim());
+    }
+
+    modalBody.innerHTML = `
+        <div class="modal-header">
+            <h2 class="modal-title">${activity.title}</h2>
+            <div class="modal-meta">
+                <span class="meta-tag">👥 ${activity.players || 'Any number of players'}</span>
+                <span class="meta-tag">⏱️ ${activity.duration_mins} minutes</span>
+                <span class="meta-tag">🎂 Ages ${activity.age_min}-${activity.age_max}</span>
+                <span class="meta-tag">💰 ${activity.cost || 'Free'}</span>
+                <span class="meta-tag">📍 ${activity.indoor_outdoor || 'Indoor/Outdoor'}</span>
+                ${activity.season ? `<span class="meta-tag">🌤️ ${activity.season}</span>` : ''}
+            </div>
+        </div>
+
+        <div class="modal-section">
+            <h3>Description</h3>
+            <p>${activity.description || 'No description available.'}</p>
+        </div>
+
+        ${activity.how_to_play ? `
+            <div class="modal-section">
+                <h3>How to Play / Instructions</h3>
+                <p>${activity.how_to_play}</p>
+            </div>
+        ` : ''}
+
+        ${materials && materials.length > 0 ? `
+            <div class="modal-section">
+                <h3>Materials Needed</h3>
+                <ul>
+                    ${Array.isArray(materials) ? materials.map(m => `<li>${m}</li>`).join('') : `<li>${materials}</li>`}
+                </ul>
+            </div>
+        ` : ''}
+
+        ${tags && tags.length > 0 ? `
+            <div class="modal-section">
+                <h3>Tags & Categories</h3>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    ${Array.isArray(tags) ? tags.map(tag => `<span class="meta-tag">${tag}</span>`).join('') : `<span class="meta-tag">${tags}</span>`}
+                </div>
+            </div>
+        ` : ''}
+
+        ${activity.parent_caution ? `
+            <div class="modal-section">
+                <h3>⚠️ Parent Caution</h3>
+                <p style="color: #ff4757;"><strong>${activity.parent_caution}</strong></p>
+            </div>
+        ` : ''}
+
+        <div class="modal-section">
+            <h3>Quick Details</h3>
+            <div class="detail-grid">
+                <div class="detail-item">
+                    <div class="detail-label">Duration</div>
+                    <div class="detail-value">${activity.duration_mins} min</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">Age Range</div>
+                    <div class="detail-value">${activity.age_min}-${activity.age_max} yrs</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">Players</div>
+                    <div class="detail-value">${activity.players || 'Any'}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">Cost</div>
+                    <div class="detail-value">${activity.cost || 'Free'}</div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// Close activity modal
+function closeActivityModal() {
+    const modal = document.getElementById('activityModal');
+    if (modal) {
+        modal.classList.remove('active');
+    }
+}
+
+// Close modal when clicking outside
+document.addEventListener('click', function(event) {
+    const modal = document.getElementById('activityModal');
+    if (event.target === modal) {
+        closeActivityModal();
+    }
+});
+
+// Close modal with Escape key
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        closeActivityModal();
+    }
+});
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async function() {
