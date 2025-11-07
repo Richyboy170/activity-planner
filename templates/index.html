@@ -1560,6 +1560,13 @@ select.form-control {
                 <main>
                     <div style="margin-bottom: var(--space-24);">
                         <input type="text" class="form-control" placeholder="Search activities..." id="searchInput">
+                        <div style="margin-top: var(--space-12); display: flex; align-items: center; gap: var(--space-8); padding: var(--space-12); background: var(--color-bg-3); border-radius: var(--radius-base);">
+                            <label style="display: flex; align-items: center; gap: var(--space-8); cursor: pointer; margin: 0;">
+                                <input type="checkbox" id="useMyGroupToggle" checked style="cursor: pointer;">
+                                <span style="font-weight: 500;">Use My Group for personalized recommendations</span>
+                            </label>
+                            <span id="myGroupIndicator" style="margin-left: auto; padding: 4px 12px; background: var(--color-primary); color: white; border-radius: 12px; font-size: 0.875rem; font-weight: 500;">0 members</span>
+                        </div>
                     </div>
                     <div id="searchResults">
                         <div class="activities-grid" id="activitiesGrid"></div>
@@ -2712,21 +2719,95 @@ select.form-control {
                     dayActivities.forEach(activity => {
                         const activityDiv = document.createElement('div');
                         activityDiv.className = 'calendar-activity';
+                        activityDiv.draggable = true;
+                        activityDiv.dataset.activityId = activity.id;
                         const time = new Date(activity.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                        activityDiv.textContent = `${activity.title} (${time})`;
-                        activityDiv.style.cursor = 'pointer';
-                        activityDiv.onclick = () => viewScheduledActivity(activity.id);
+                        activityDiv.innerHTML = `
+                            <span style="flex: 1;">${activity.title} (${time})</span>
+                            <button onclick="event.stopPropagation(); editScheduledActivity(${activity.id})" style="padding: 2px 6px; font-size: 0.75rem; background: var(--color-primary); color: white; border: none; border-radius: 4px; cursor: pointer; margin-left: 4px;">Edit</button>
+                        `;
+                        activityDiv.style.cursor = 'move';
+                        activityDiv.style.display = 'flex';
+                        activityDiv.style.alignItems = 'center';
+                        activityDiv.style.gap = '4px';
+
+                        // Drag events
+                        activityDiv.ondragstart = (e) => {
+                            e.dataTransfer.setData('activityId', activity.id);
+                            activityDiv.style.opacity = '0.5';
+                        };
+                        activityDiv.ondragend = (e) => {
+                            activityDiv.style.opacity = '1';
+                        };
+
+                        // Double-click to view details
+                        activityDiv.ondblclick = () => viewScheduledActivity(activity.id);
+
                         activitiesContainer.appendChild(activityDiv);
                     });
 
                     dayElement.appendChild(activitiesContainer);
                 }
 
+                // Make day element a drop target
+                dayElement.ondragover = (e) => {
+                    e.preventDefault();
+                    dayElement.style.background = 'var(--color-bg-3)';
+                };
+                dayElement.ondragleave = (e) => {
+                    dayElement.style.background = '';
+                };
+                dayElement.ondrop = (e) => {
+                    e.preventDefault();
+                    dayElement.style.background = '';
+                    const activityId = parseFloat(e.dataTransfer.getData('activityId'));
+                    moveActivityToDay(activityId, year, month, day);
+                };
+
                 calendarGrid.appendChild(dayElement);
             }
         }
 
-        // View scheduled activity details
+        // Move activity to a new day (drag and drop)
+        function moveActivityToDay(activityId, year, month, day) {
+            const activity = scheduledActivities.find(a => a.id === activityId);
+            if (!activity) return;
+
+            // Keep the same time, just change the date
+            const currentDate = new Date(activity.date);
+            const newDate = new Date(year, month, day, currentDate.getHours(), currentDate.getMinutes());
+
+            activity.date = newDate.toISOString();
+            renderCalendar();
+        }
+
+        // Edit scheduled activity
+        function editScheduledActivity(activityId) {
+            const activity = scheduledActivities.find(a => a.id === activityId);
+            if (!activity) return;
+
+            const currentDate = new Date(activity.date);
+            const dateStr = currentDate.toISOString().split('T')[0];
+            const timeStr = currentDate.toTimeString().slice(0, 5);
+
+            const newDateStr = prompt('Enter new date (YYYY-MM-DD):', dateStr);
+            if (!newDateStr) return;
+
+            const newTimeStr = prompt('Enter new time (HH:MM):', timeStr);
+            if (!newTimeStr) return;
+
+            const newDateTime = new Date(`${newDateStr}T${newTimeStr}`);
+            if (isNaN(newDateTime.getTime())) {
+                alert('Invalid date or time format');
+                return;
+            }
+
+            activity.date = newDateTime.toISOString();
+            renderCalendar();
+            alert('Activity updated successfully!');
+        }
+
+        // View scheduled activity details (double-click)
         function viewScheduledActivity(activityId) {
             const activity = scheduledActivities.find(a => a.id === activityId);
             if (!activity) return;
@@ -3351,6 +3432,7 @@ select.form-control {
                 renderFeaturedActivities();
             } else if (viewId === 'search') {
                 renderActivities(currentActivities);
+                updateMyGroupIndicator();
             } else if (viewId === 'calendar') {
                 renderCalendar();
             } else if (viewId === 'my-group') {
@@ -3361,6 +3443,20 @@ select.form-control {
                 }
                 // Setup event listeners after a small delay to ensure DOM is ready
                 setTimeout(setupMemberFormEventListeners, 100);
+            }
+        }
+
+        // Update "My Group" indicator in search view
+        function updateMyGroupIndicator() {
+            const indicator = document.getElementById('myGroupIndicator');
+            if (indicator) {
+                const count = (window.groupMembers || []).length;
+                indicator.textContent = count === 1 ? '1 member' : `${count} members`;
+                if (count === 0) {
+                    indicator.style.background = 'var(--color-text-3)';
+                } else {
+                    indicator.style.background = 'var(--color-primary)';
+                }
             }
         }
 
@@ -3384,12 +3480,13 @@ select.form-control {
         function createActivityCard(activity, includeActions = true) {
             const seasonText = Array.isArray(activity.season) ? activity.season.join(', ') : activity.season;
             const materialsText = Array.isArray(activity.materials_needed) ? activity.materials_needed.join(', ') : activity.materials_needed;
-            
+            const locationText = activity.indoor_outdoor === 'Both' ? 'Indoor & Outdoor' : activity.indoor_outdoor;
+
             return `
                 <div class="activity-card">
                     <div class="activity-header">
                         <h3 class="activity-title">${activity.title}</h3>
-                        <div class="meta-badge">${activity.indoor_outdoor}</div>
+                        <div class="meta-badge">${locationText}</div>
                     </div>
                     <div class="activity-meta">
                         <div class="meta-badge">Ages ${activity.age_min}-${activity.age_max}</div>
@@ -3427,7 +3524,10 @@ select.form-control {
         // Activity details modal
         function viewActivityDetails(title) {
             const activity = sampleActivities.find(a => a.title === title);
-            if (!activity) return;
+            if (!activity) {
+                alert('Activity not found. Please try searching again.');
+                return;
+            }
 
             const titleElement = document.getElementById('activityDetailsTitle');
             const breadcrumbElement = document.getElementById('activityDetailsBreadcrumb');
@@ -3435,16 +3535,17 @@ select.form-control {
 
             titleElement.textContent = activity.title;
             breadcrumbElement.textContent = activity.title;
-            
+
             const seasonText = Array.isArray(activity.season) ? activity.season.join(', ') : activity.season;
             const materialsText = Array.isArray(activity.materials_needed) ? activity.materials_needed.join(', ') : activity.materials_needed;
-            
+            const locationText = activity.indoor_outdoor === 'Both' ? 'Indoor & Outdoor' : activity.indoor_outdoor;
+
             contentElement.innerHTML = `
                 <div class="activity-meta" style="margin-bottom: var(--space-16);">
                     <div class="meta-badge">Ages ${activity.age_min}-${activity.age_max}</div>
                     <div class="meta-badge">${activity.duration_mins} minutes</div>
                     <div class="meta-badge">${activity.cost}</div>
-                    <div class="meta-badge">${activity.indoor_outdoor}</div>
+                    <div class="meta-badge">${locationText}</div>
                     <div class="meta-badge">${activity.players} players</div>
                 </div>
                 
@@ -3475,10 +3576,6 @@ select.form-control {
             `;
 
             showView('activity-details');
-        }
-
-        function addToPlan(title) {
-            // Activity added silently
         }
 
         function editActivity(title) {
@@ -3605,7 +3702,8 @@ select.form-control {
                     if (activity.age_min > maxAge || activity.age_max < minAge) return false;
                     if (duration && activity.duration_mins < parseInt(duration)) return false;
                     if (cost && activity.cost !== cost) return false;
-                    if (indoorOutdoor && activity.indoor_outdoor !== indoorOutdoor) return false;
+                    // Handle "Both" - activities marked as "Both" should appear in Indoor and Outdoor filters
+                    if (indoorOutdoor && activity.indoor_outdoor !== indoorOutdoor && activity.indoor_outdoor !== 'Both') return false;
                     if (season) {
                         const activitySeasons = Array.isArray(activity.season) ? activity.season : [activity.season];
                         if (!activitySeasons.includes(season) && !activitySeasons.includes('All seasons')) return false;
@@ -3621,12 +3719,16 @@ select.form-control {
             // If there's a query, use AI search API
             if (query) {
                 try {
+                    // Check if "Use My Group" toggle is enabled
+                    const useMyGroup = document.getElementById('useMyGroupToggle')?.checked ?? true;
+                    const membersToUse = useMyGroup ? (window.groupMembers || []) : [];
+
                     const response = await fetch('/api/recommend', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             query: query,
-                            group_members: window.groupMembers || [],
+                            group_members: membersToUse,
                             preferences: [],
                             top_k: 20
                         })
@@ -3792,6 +3894,14 @@ select.form-control {
                     performSearch(document.getElementById('searchInput').value);
                 });
             });
+
+            // My Group toggle
+            const myGroupToggle = document.getElementById('useMyGroupToggle');
+            if (myGroupToggle) {
+                myGroupToggle.addEventListener('change', () => {
+                    performSearch(document.getElementById('searchInput').value);
+                });
+            }
 
             // Toggle buttons
             document.querySelectorAll('.toggle-btn').forEach(btn => {
