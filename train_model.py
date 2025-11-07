@@ -217,6 +217,8 @@ class DenseEmbedder:
         logger.info(f"  Shape: {self.embeddings.shape}")
         logger.info(f"  Memory: {self.embeddings.nbytes / 1024 / 1024:.2f} MB")
 
+        return self.embeddings
+
     def build_faiss_index(self):
         """Build FAISS index for fast similarity search"""
         logger.info(f"Building FAISS index (metric: {self.config.faiss_metric})...")
