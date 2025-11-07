@@ -265,6 +265,7 @@ class ActivityRecommenderWithLinkage:
                     elif isinstance(activity[col], (list, dict)):
                         activity[col] = str(activity[col])
 
+                activity['id'] = idx + 1  # DB IDs start from 1
                 activity['rank'] = rank
                 activity['scores'] = {
                     'final_score': result['final_score'],
