@@ -440,6 +440,7 @@ def create_app(dataset_path='dataset/dataset.csv', models_dir='models',
                 formatted_recommendations = []
                 for rec in result['recommendations']:
                     formatted_rec = {
+                        'id': rec.get('id'),  # Include activity ID for details view
                         'title': rec.get('title', 'Activity'),
                         'description': rec.get('description', ''),
                         'duration_mins': rec.get('duration_mins'),
