@@ -342,14 +342,14 @@ class NeuralTrainer:
 
         labels = np.array(labels)
 
-        # First split: separate test set (15%)
+        # First split: separate test set (10%)
         X_temp, X_test, y_temp, y_test = train_test_split(
-            embeddings, labels, test_size=0.15, random_state=42, stratify=labels
+            embeddings, labels, test_size=0.10, random_state=42, stratify=labels
         )
 
-        # Second split: separate train and validation (70% train, 15% val from remaining)
+        # Second split: separate train and validation (80% train, 10% val from remaining)
         X_train, X_val, y_train, y_val = train_test_split(
-            X_temp, y_temp, test_size=0.176, random_state=42, stratify=y_temp  # 0.176 * 0.85 ≈ 0.15
+            X_temp, y_temp, test_size=0.111, random_state=42, stratify=y_temp  # 0.111 * 0.90 ≈ 0.10
         )
 
         logger.info(f"✓ Train set: {len(X_train)} samples ({len(X_train)/len(embeddings)*100:.1f}%)")

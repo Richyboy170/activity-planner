@@ -6,7 +6,7 @@ This implementation adds a neural network classifier that can be trained on acti
 ## New Features
 
 ### 1. Neural Network Training (`train_model.py`)
-- **Train/Validation/Test Split**: Data is split into 70% train, 15% validation, 15% test
+- **Train/Validation/Test Split**: Data is split into 80% train, 10% validation, 10% test
 - **Batch Loss Display**: Shows loss for each batch during training with progress bars
 - **Multi-layer Classifier**:
   - Input: Sentence-BERT embeddings (384 dimensions)
@@ -61,9 +61,9 @@ python train_model.py --dataset dataset/dataset.csv --output-dir models --model 
 ### Training Output
 ```
 [Neural Network] Preparing train/validation/test split...
-✓ Train set: 70.0% of data
-✓ Validation set: 15.0% of data
-✓ Test set: 15.0% of data
+✓ Train set: 80.0% of data
+✓ Validation set: 10.0% of data
+✓ Test set: 10.0% of data
 
 [Neural Network] Starting training for 10 epochs...
 Epoch 1/10: 100%|████████| batch_loss: 1.2345, avg_loss: 1.2500
