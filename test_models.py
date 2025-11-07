@@ -262,7 +262,7 @@ class ModelTester:
             # Try to load history
             history_path = model_path.parent / "training_history.json"
             if history_path.exists():
-                with open(history_path, 'r') as f:
+                with open(history_path, 'r', encoding='utf-8') as f:
                     history = json.load(f)
             else:
                 history = None
@@ -434,7 +434,7 @@ class ModelTester:
         }, model_path)
 
         history_path = model_path.parent / "training_history.json"
-        with open(history_path, 'w') as f:
+        with open(history_path, 'w', encoding='utf-8') as f:
             json.dump(history, f, indent=2)
 
         print(f"✓ Model saved to {model_path}")
@@ -740,7 +740,7 @@ class ModelTester:
 
         # Save JSON report
         report_path = self.output_dir / "test_report.json"
-        with open(report_path, 'w') as f:
+        with open(report_path, 'w', encoding='utf-8') as f:
             json.dump(report, f, indent=2)
 
         print(f"✓ JSON report saved to {report_path}")
@@ -754,7 +754,7 @@ class ModelTester:
         """Generate human-readable markdown report."""
         md_path = self.output_dir / "TEST_REPORT.md"
 
-        with open(md_path, 'w') as f:
+        with open(md_path, 'w', encoding='utf-8') as f:
             f.write("# Model Testing Report\n\n")
             f.write(f"**Test Date:** {report['metadata']['test_date']}\n\n")
             f.write("---\n\n")
