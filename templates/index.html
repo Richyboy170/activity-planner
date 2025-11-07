@@ -2388,8 +2388,8 @@ select.form-control {
                         if (value.toLowerCase() === 'free') value = 'Free';
                         else if (value.toLowerCase() === 'low') value = '$1-10';
                     } else if (header === 'indoor_outdoor') {
-                        // Capitalize first letter
-                        if (value.toLowerCase() === 'both') value = 'Both';
+                        // Make 'both' more descriptive
+                        if (value.toLowerCase() === 'both') value = 'Indoor & Outdoor';
                         else value = value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
                     } else if (header === 'parent_caution') {
                         value = value === 'no' || value === '' ? '' : 'Parental supervision recommended';
@@ -3380,16 +3380,25 @@ select.form-control {
             });
         });
 
+        // Helper function to normalize indoor_outdoor display
+        function normalizeIndoorOutdoor(value) {
+            if (!value) return 'Indoor & Outdoor';
+            const lower = value.toLowerCase();
+            if (lower === 'both') return 'Indoor & Outdoor';
+            return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
+        }
+
         // Activity card rendering
         function createActivityCard(activity, includeActions = true) {
             const seasonText = Array.isArray(activity.season) ? activity.season.join(', ') : activity.season;
             const materialsText = Array.isArray(activity.materials_needed) ? activity.materials_needed.join(', ') : activity.materials_needed;
-            
+            const indoorOutdoorText = normalizeIndoorOutdoor(activity.indoor_outdoor);
+
             return `
                 <div class="activity-card">
                     <div class="activity-header">
                         <h3 class="activity-title">${activity.title}</h3>
-                        <div class="meta-badge">${activity.indoor_outdoor}</div>
+                        <div class="meta-badge">${indoorOutdoorText}</div>
                     </div>
                     <div class="activity-meta">
                         <div class="meta-badge">Ages ${activity.age_min}-${activity.age_max}</div>
@@ -3438,13 +3447,14 @@ select.form-control {
             
             const seasonText = Array.isArray(activity.season) ? activity.season.join(', ') : activity.season;
             const materialsText = Array.isArray(activity.materials_needed) ? activity.materials_needed.join(', ') : activity.materials_needed;
-            
+            const indoorOutdoorText = normalizeIndoorOutdoor(activity.indoor_outdoor);
+
             contentElement.innerHTML = `
                 <div class="activity-meta" style="margin-bottom: var(--space-16);">
                     <div class="meta-badge">Ages ${activity.age_min}-${activity.age_max}</div>
                     <div class="meta-badge">${activity.duration_mins} minutes</div>
                     <div class="meta-badge">${activity.cost}</div>
-                    <div class="meta-badge">${activity.indoor_outdoor}</div>
+                    <div class="meta-badge">${indoorOutdoorText}</div>
                     <div class="meta-badge">${activity.players} players</div>
                 </div>
                 
@@ -3646,7 +3656,7 @@ select.form-control {
                             age_max: rec.age_max || 100,
                             duration_mins: rec.duration_mins || 30,
                             cost: rec.cost || 'Free',
-                            indoor_outdoor: rec.indoor_outdoor || rec.location || 'Both',
+                            indoor_outdoor: rec.indoor_outdoor || rec.location || 'Indoor & Outdoor',
                             players: rec.players || '1+',
                             how_to_play: rec.how_to_play || rec.description || 'No instructions available',
                             materials_needed: rec.materials_needed || 'None',

@@ -300,6 +300,14 @@ async function viewActivityDetails(activityId, activityTitle) {
     }
 }
 
+// Helper function to normalize indoor_outdoor display
+function normalizeIndoorOutdoor(value) {
+    if (!value) return 'Indoor & Outdoor';
+    const lower = value.toLowerCase();
+    if (lower === 'both') return 'Indoor & Outdoor';
+    return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
+}
+
 // Display activity details in modal
 function displayActivityDetails(activity) {
     const modalBody = document.getElementById('modalBody');
@@ -316,6 +324,9 @@ function displayActivityDetails(activity) {
         tags = tags.split(',').map(t => t.trim());
     }
 
+    // Normalize indoor_outdoor display
+    const indoorOutdoorText = normalizeIndoorOutdoor(activity.indoor_outdoor);
+
     modalBody.innerHTML = `
         <div class="modal-header">
             <h2 class="modal-title">${activity.title}</h2>
@@ -324,7 +335,7 @@ function displayActivityDetails(activity) {
                 <span class="meta-tag">⏱️ ${activity.duration_mins} minutes</span>
                 <span class="meta-tag">🎂 Ages ${activity.age_min}-${activity.age_max}</span>
                 <span class="meta-tag">💰 ${activity.cost || 'Free'}</span>
-                <span class="meta-tag">📍 ${activity.indoor_outdoor || 'Indoor/Outdoor'}</span>
+                <span class="meta-tag">📍 ${indoorOutdoorText}</span>
                 ${activity.season ? `<span class="meta-tag">🌤️ ${activity.season}</span>` : ''}
             </div>
         </div>

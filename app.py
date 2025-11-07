@@ -442,10 +442,18 @@ def create_app(dataset_path='dataset/dataset.csv', models_dir='models',
                     formatted_rec = {
                         'id': rec.get('id'),  # Include activity ID for details view
                         'title': rec.get('title', 'Activity'),
-                        'description': rec.get('description', ''),
+                        'description': rec.get('how_to_play', ''),  # Use how_to_play as description
+                        'age_min': rec.get('age_min'),
+                        'age_max': rec.get('age_max'),
                         'duration_mins': rec.get('duration_mins'),
                         'cost': rec.get('cost'),
-                        'location': rec.get('location'),
+                        'indoor_outdoor': rec.get('indoor_outdoor'),  # Fix: was 'location', should be 'indoor_outdoor'
+                        'season': rec.get('season'),
+                        'materials_needed': rec.get('materials_needed'),
+                        'how_to_play': rec.get('how_to_play'),
+                        'players': rec.get('players'),
+                        'parent_caution': rec.get('parent_caution'),
+                        'tags': rec.get('tags'),
                         'recommendation_score': rec['scores']['final_score'] if 'scores' in rec else 0.5
                     }
                     formatted_recommendations.append(formatted_rec)
