@@ -366,11 +366,11 @@ class ModelTester:
             val_dataset, batch_size=batch_size, shuffle=False
         )
 
-        # Training history
+        # Training history (use plural keys to match train_model.py)
         history = {
-            "train_loss": [],
-            "val_loss": [],
-            "val_accuracy": []
+            "train_losses": [],
+            "val_losses": [],
+            "val_accuracies": []
         }
 
         # Training loop
@@ -412,9 +412,9 @@ class ModelTester:
             val_loss /= len(val_loader)
             val_accuracy = correct / total
 
-            history["train_loss"].append(train_loss)
-            history["val_loss"].append(val_loss)
-            history["val_accuracy"].append(val_accuracy)
+            history["train_losses"].append(train_loss)
+            history["val_losses"].append(val_loss)
+            history["val_accuracies"].append(val_accuracy)
 
             if (epoch + 1) % 10 == 0:
                 print(f"  Epoch {epoch+1}/{epochs}: "
@@ -429,8 +429,8 @@ class ModelTester:
         # Save in the same format as train_model.py
         torch.save({
             'model_state_dict': model.state_dict(),
-            'train_losses': history["train_loss"],
-            'val_losses': history["val_loss"],
+            'train_losses': history["train_losses"],
+            'val_losses': history["val_losses"],
         }, model_path)
 
         history_path = model_path.parent / "training_history.json"
@@ -500,25 +500,53 @@ class ModelTester:
         """Plot learning curves for neural network."""
         history = self.primary_results["training_history"]
 
-        fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+        # Check if history has the required keys
+        # Handle both singular and plural key names for backward compatibility
+        train_loss_key = None
+        val_loss_key = None
+
+        if "train_loss" in history:
+            train_loss_key = "train_loss"
+        elif "train_losses" in history:
+            train_loss_key = "train_losses"
+
+        if "val_loss" in history:
+            val_loss_key = "val_loss"
+        elif "val_losses" in history:
+            val_loss_key = "val_losses"
+
+        if not train_loss_key or not val_loss_key:
+            print("  ⚠ Training history missing required keys, skipping learning curves")
+            return
+
+        # Check if we have accuracy data
+        has_accuracy = "val_accuracy" in history or "val_accuracies" in history
+
+        if has_accuracy:
+            fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+        else:
+            fig, axes = plt.subplots(1, 1, figsize=(10, 5))
+            axes = [axes]  # Make it a list for consistent indexing
 
         # Loss curves
-        epochs = range(1, len(history["train_loss"]) + 1)
-        axes[0].plot(epochs, history["train_loss"], 'b-', label='Training Loss', linewidth=2)
-        axes[0].plot(epochs, history["val_loss"], 'r-', label='Validation Loss', linewidth=2)
+        epochs = range(1, len(history[train_loss_key]) + 1)
+        axes[0].plot(epochs, history[train_loss_key], 'b-', label='Training Loss', linewidth=2)
+        axes[0].plot(epochs, history[val_loss_key], 'r-', label='Validation Loss', linewidth=2)
         axes[0].set_title('Training and Validation Loss', fontsize=14, fontweight='bold')
         axes[0].set_xlabel('Epoch', fontsize=12)
         axes[0].set_ylabel('Loss', fontsize=12)
         axes[0].legend(fontsize=10)
         axes[0].grid(True, alpha=0.3)
 
-        # Accuracy curve
-        axes[1].plot(epochs, history["val_accuracy"], 'g-', label='Validation Accuracy', linewidth=2)
-        axes[1].set_title('Validation Accuracy', fontsize=14, fontweight='bold')
-        axes[1].set_xlabel('Epoch', fontsize=12)
-        axes[1].set_ylabel('Accuracy', fontsize=12)
-        axes[1].legend(fontsize=10)
-        axes[1].grid(True, alpha=0.3)
+        # Accuracy curve (only if available)
+        if has_accuracy:
+            acc_key = "val_accuracy" if "val_accuracy" in history else "val_accuracies"
+            axes[1].plot(epochs, history[acc_key], 'g-', label='Validation Accuracy', linewidth=2)
+            axes[1].set_title('Validation Accuracy', fontsize=14, fontweight='bold')
+            axes[1].set_xlabel('Epoch', fontsize=12)
+            axes[1].set_ylabel('Accuracy', fontsize=12)
+            axes[1].legend(fontsize=10)
+            axes[1].grid(True, alpha=0.3)
 
         plt.tight_layout()
         plt.savefig(fig_dir / 'learning_curves.png', dpi=300, bbox_inches='tight')
