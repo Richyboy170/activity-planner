@@ -235,6 +235,9 @@ class ModelTester:
         print("TESTING PRIMARY MODEL (Neural Network)")
         print("="*60)
 
+        # Model architecture (must match training)
+        hidden_dims = [256, 128, 64]
+
         # Check if model exists
         model_path = Path(model_path)
         if not model_path.exists():
@@ -243,8 +246,17 @@ class ModelTester:
             model, history = self._train_neural_network(X_train, y_train, X_val, y_val)
         else:
             print(f"✓ Loading model from {model_path}")
-            model = ActivityClassifier(input_dim=384, num_classes=4)
-            model.load_state_dict(torch.load(model_path))
+            model = ActivityClassifier(input_dim=384, hidden_dims=hidden_dims, num_classes=4)
+
+            # Load checkpoint
+            checkpoint = torch.load(model_path, map_location='cpu')
+
+            # Handle both save formats
+            if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
+                model.load_state_dict(checkpoint['model_state_dict'])
+            else:
+                model.load_state_dict(checkpoint)
+
             model.eval()
 
             # Try to load history
@@ -335,8 +347,11 @@ class ModelTester:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         print(f"Using device: {device}")
 
+        # Model architecture (must match training)
+        hidden_dims = [256, 128, 64]
+
         # Create model
-        model = ActivityClassifier(input_dim=384, num_classes=4).to(device)
+        model = ActivityClassifier(input_dim=384, hidden_dims=hidden_dims, num_classes=4).to(device)
         criterion = nn.CrossEntropyLoss()
         optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
@@ -410,7 +425,13 @@ class ModelTester:
         # Save model
         model_path = Path("models/neural_classifier.pth")
         model_path.parent.mkdir(exist_ok=True)
-        torch.save(model.state_dict(), model_path)
+
+        # Save in the same format as train_model.py
+        torch.save({
+            'model_state_dict': model.state_dict(),
+            'train_losses': history["train_loss"],
+            'val_losses': history["val_loss"],
+        }, model_path)
 
         history_path = model_path.parent / "training_history.json"
         with open(history_path, 'w') as f:
