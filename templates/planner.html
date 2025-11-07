@@ -504,10 +504,10 @@
             </button>
         </div>
 
-        <!-- Step 2: Search (Hidden initially) -->
-        <div class="card hidden" id="searchCard">
+        <!-- Search Box (Always Visible - Google-like instant search) -->
+        <div class="card" id="searchCard">
             <div class="section-title">
-                <span class="step-number">2</span>
+                <span class="step-number">🔍</span>
                 <span>Search Activities</span>
             </div>
 
@@ -638,7 +638,7 @@
             }
         }
 
-        // Search activities
+        // Search activities - Google-like instant search (no session required)
         async function searchActivities() {
             const query = document.getElementById('searchInput').value.trim();
 
@@ -647,10 +647,7 @@
                 return;
             }
 
-            if (!sessionId) {
-                alert('Session not found. Please refresh and start over.');
-                return;
-            }
+            console.log('🔍 Searching for:', query);
 
             const resultsContainer = document.getElementById('searchResults');
             resultsContainer.innerHTML = `
@@ -661,20 +658,34 @@
             `;
 
             try {
-                const response = await fetch('/api/search', {
+                // Use /api/recommend which doesn't require a session
+                const response = await fetch('/api/recommend', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        session_id: sessionId,
                         query: query,
+                        group_members: members || [],  // Use current members if any
+                        preferences: preferences || [],
                         top_k: 12
                     })
                 });
 
                 const data = await response.json();
+                console.log('📊 Search results:', data);
 
-                if (data.status === 'success') {
-                    displayResults(data.recommendations);
+                if (data.status === 'success' && data.recommendations) {
+                    // Transform recommendations to match expected format with rank
+                    const rankedRecommendations = data.recommendations.map((rec, index) => ({
+                        ...rec,
+                        rank: index + 1,
+                        scores: {
+                            final_score: rec.recommendation_score || 0.5,
+                            semantic_linkage: rec.recommendation_score || 0.5,
+                            age_fit_linkage: 0.5,
+                            preference_linkage: 0.5
+                        }
+                    }));
+                    displayResults(rankedRecommendations);
                 } else {
                     resultsContainer.innerHTML = `
                         <div class="empty-state">
@@ -685,7 +696,7 @@
                     `;
                 }
             } catch (error) {
-                console.error('Error:', error);
+                console.error('❌ Search error:', error);
                 resultsContainer.innerHTML = `
                     <div class="empty-state">
                         <div class="empty-state-icon">⚠️</div>

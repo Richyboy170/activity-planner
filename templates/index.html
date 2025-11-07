@@ -2427,22 +2427,33 @@ select.form-control {
             return result;
         }
 
-        // Load activities from CSV
+        // Load activities from API
         async function loadActivitiesFromCSV() {
             try {
-                const response = await fetch('dataset/dataset.csv');
-                const text = await response.text();
-                sampleActivities = parseCSV(text);
-                console.log(`Loaded ${sampleActivities.length} activities from CSV`);
+                const response = await fetch('/api/activities');
+                const data = await response.json();
 
-                // Initialize the display
-                currentActivities = [...sampleActivities];
-                renderFeaturedActivities();
+                if (data.status === 'success' && data.activities) {
+                    // Transform API format to match expected structure
+                    sampleActivities = data.activities.map(activity => ({
+                        ...activity,
+                        tags: activity.tags ? (typeof activity.tags === 'string' ? activity.tags.split(',').map(t => t.trim()) : activity.tags) : [],
+                        season: activity.season || 'All seasons',
+                        materials_needed: activity.materials_needed || 'None'
+                    }));
+                    console.log(`Loaded ${sampleActivities.length} activities from API`);
+
+                    // Initialize the display
+                    currentActivities = [...sampleActivities];
+                    renderFeaturedActivities();
+                } else {
+                    throw new Error('Failed to load activities from API');
+                }
             } catch (error) {
-                console.error('Error loading CSV:', error);
-                // Fallback to empty array if CSV fails to load
+                console.error('Error loading activities:', error);
                 sampleActivities = [];
-                alert('Could not load activities database. Please check that the dataset file exists.');
+                // Don't show alert, just log the error
+                console.log('Activities will be loaded on-demand via search');
             }
         }
 
@@ -3577,53 +3588,92 @@ select.form-control {
             });
         }
 
-        // Search functionality
-        function performSearch(query = '') {
-            let filtered = [...sampleActivities];
+        // Search functionality - Google-like instant search using AI
+        async function performSearch(query = '') {
+            console.log('🔍 Performing search for:', query);
 
-            // Text search
-            if (query) {
-                const searchTerm = query.toLowerCase();
-                filtered = filtered.filter(activity => 
-                    activity.title.toLowerCase().includes(searchTerm) ||
-                    activity.tags.some(tag => tag.toLowerCase().includes(searchTerm)) ||
-                    activity.how_to_play.toLowerCase().includes(searchTerm)
-                );
+            // If no query and we have sample activities, show them filtered by current filters
+            if (!query && sampleActivities.length > 0) {
+                const minAge = parseInt(document.getElementById('minAge')?.value || 0);
+                const maxAge = parseInt(document.getElementById('maxAge')?.value || 100);
+                const duration = document.getElementById('durationFilter')?.value;
+                const cost = document.getElementById('costFilter')?.value;
+                const season = document.getElementById('seasonFilter')?.value;
+                const indoorOutdoor = document.querySelector('.toggle-btn.active[data-filter="indoor_outdoor"]')?.dataset.value;
+
+                let filtered = sampleActivities.filter(activity => {
+                    if (activity.age_min > maxAge || activity.age_max < minAge) return false;
+                    if (duration && activity.duration_mins < parseInt(duration)) return false;
+                    if (cost && activity.cost !== cost) return false;
+                    if (indoorOutdoor && activity.indoor_outdoor !== indoorOutdoor) return false;
+                    if (season) {
+                        const activitySeasons = Array.isArray(activity.season) ? activity.season : [activity.season];
+                        if (!activitySeasons.includes(season) && !activitySeasons.includes('All seasons')) return false;
+                    }
+                    return true;
+                });
+
+                currentActivities = filtered;
+                renderActivities(filtered);
+                return;
             }
 
-            // Apply filters
-            const minAge = parseInt(document.getElementById('minAge').value);
-            const maxAge = parseInt(document.getElementById('maxAge').value);
-            const duration = document.getElementById('durationFilter').value;
-            const cost = document.getElementById('costFilter').value;
-            const season = document.getElementById('seasonFilter').value;
-            const players = document.getElementById('playersFilter').value;
-            const indoorOutdoor = document.querySelector('.toggle-btn.active[data-filter="indoor_outdoor"]').dataset.value;
+            // If there's a query, use AI search API
+            if (query) {
+                try {
+                    const response = await fetch('/api/recommend', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            query: query,
+                            group_members: window.groupMembers || [],
+                            preferences: [],
+                            top_k: 20
+                        })
+                    });
 
-            filtered = filtered.filter(activity => {
-                // Age range filter
-                if (activity.age_min > maxAge || activity.age_max < minAge) return false;
-                
-                // Duration filter
-                if (duration && activity.duration_mins < parseInt(duration)) return false;
-                
-                // Cost filter
-                if (cost && activity.cost !== cost) return false;
-                
-                // Indoor/Outdoor filter
-                if (indoorOutdoor && activity.indoor_outdoor !== indoorOutdoor) return false;
-                
-                // Season filter
-                if (season) {
-                    const activitySeasons = Array.isArray(activity.season) ? activity.season : [activity.season];
-                    if (!activitySeasons.includes(season) && !activitySeasons.includes('All seasons')) return false;
+                    const data = await response.json();
+                    console.log('📊 API Response:', data);
+
+                    if (data.status === 'success' && data.recommendations) {
+                        // Transform API recommendations to match expected structure
+                        const activities = data.recommendations.map(rec => ({
+                            id: rec.id,
+                            title: rec.title || 'Activity',
+                            description: rec.description || '',
+                            tags: rec.tags ? (typeof rec.tags === 'string' ? rec.tags.split(',').map(t => t.trim()) : rec.tags) : [],
+                            age_min: rec.age_min || 0,
+                            age_max: rec.age_max || 100,
+                            duration_mins: rec.duration_mins || 30,
+                            cost: rec.cost || 'Free',
+                            indoor_outdoor: rec.indoor_outdoor || rec.location || 'Both',
+                            players: rec.players || '1+',
+                            how_to_play: rec.how_to_play || rec.description || 'No instructions available',
+                            materials_needed: rec.materials_needed || 'None',
+                            season: rec.season || 'All seasons',
+                            parent_caution: rec.parent_caution || '',
+                            recommendation_score: rec.recommendation_score || 0
+                        }));
+
+                        console.log(`✅ Displaying ${activities.length} activities`);
+                        currentActivities = activities;
+                        sampleActivities = activities; // Update sample activities for viewing details
+                        renderActivities(activities);
+                    } else {
+                        console.error('❌ Search failed:', data);
+                        const grid = document.getElementById('activitiesGrid');
+                        if (grid) {
+                            grid.innerHTML = '<p>No activities found. Try a different search term.</p>';
+                        }
+                    }
+                } catch (error) {
+                    console.error('❌ Search error:', error);
+                    const grid = document.getElementById('activitiesGrid');
+                    if (grid) {
+                        grid.innerHTML = '<p>Search failed. Please try again.</p>';
+                    }
                 }
-                
-                return true;
-            });
-
-            currentActivities = filtered;
-            renderActivities(filtered);
+            }
         }
 
         // Initialize group members array
