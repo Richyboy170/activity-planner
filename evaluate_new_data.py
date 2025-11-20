@@ -143,13 +143,27 @@ class NewDataEvaluator:
         # Handle both checkpoint formats
         if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
             # Checkpoint format (includes training history)
-            model.load_state_dict(checkpoint['model_state_dict'])
+            state_dict = checkpoint['model_state_dict']
             logger.info("Loaded model from checkpoint format with training history")
         else:
             # Direct state dict format
-            model.load_state_dict(checkpoint)
+            state_dict = checkpoint
             logger.info("Loaded model from direct state dict format")
 
+        # Handle legacy checkpoint with "model." prefix instead of "network."
+        # This remaps old keys to match the current architecture
+        if any(key.startswith('model.') for key in state_dict.keys()):
+            logger.info("Remapping legacy state dict keys from 'model.' to 'network.'")
+            new_state_dict = {}
+            for key, value in state_dict.items():
+                if key.startswith('model.'):
+                    new_key = key.replace('model.', 'network.', 1)
+                    new_state_dict[new_key] = value
+                else:
+                    new_state_dict[key] = value
+            state_dict = new_state_dict
+
+        model.load_state_dict(state_dict)
         model.to(self.device)
         model.eval()
 
