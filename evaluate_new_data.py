@@ -123,27 +123,38 @@ class NewDataEvaluator:
                 return json.load(f)
         return {}
 
-    def _load_classifier(self) -> nn.Module:
-        """Load the trained neural network classifier."""
-        model_path = self.model_dir / 'neural_classifier.pth'
-        if not model_path.exists():
-            raise FileNotFoundError(f"Model not found at {model_path}")
+def _load_classifier(self) -> nn.Module:
+    """Load the trained neural network classifier."""
+    model_path = self.model_dir / 'neural_classifier.pth'
+    if not model_path.exists():
+        raise FileNotFoundError(f"Model not found at {model_path}")
 
-        # Initialize model with same architecture as training
-        model = NeuralClassifier(
-            input_dim=384,
-            hidden_dims=[256, 128, 64],
-            num_classes=4,
-            dropout=0.3
-        )
+    # Initialize model with same architecture as training
+    model = NeuralClassifier(
+        input_dim=384,
+        hidden_dims=[256, 128, 64],
+        num_classes=4,
+        dropout=0.3
+    )
 
-        # Load weights
-        model.load_state_dict(torch.load(model_path, map_location=self.device))
-        model.to(self.device)
-        model.eval()
+    # Load checkpoint
+    checkpoint = torch.load(model_path, map_location=self.device)
+    
+    # Handle both checkpoint formats
+    if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
+        # Checkpoint format (includes training history)
+        model.load_state_dict(checkpoint['model_state_dict'])
+        logger.info("Loaded model from checkpoint format with training history")
+    else:
+        # Direct state dict format
+        model.load_state_dict(checkpoint)
+        logger.info("Loaded model from direct state dict format")
+    
+    model.to(self.device)
+    model.eval()
 
-        logger.info(f"Loaded classifier from {model_path}")
-        return model
+    logger.info(f"Loaded classifier from {model_path}")
+    return model
 
     def _load_baseline_metrics(self) -> Dict:
         """Load baseline performance metrics from original test set."""

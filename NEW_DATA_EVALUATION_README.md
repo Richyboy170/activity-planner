@@ -83,14 +83,19 @@ This will create:
 - `new_data/new_activities_YYYYMMDD_HHMMSS.csv` - The new dataset
 - `new_data/new_activities_YYYYMMDD_HHMMSS.csv.metadata.json` - Provenance metadata
 
+new_activities_20251120_162717
 ### Step 2: Run Evaluation
 
 Evaluate the model on the new data:
 
 ```bash
 python evaluate_new_data.py \
-    --new-data new_data/new_activities_YYYYMMDD_HHMMSS.csv \
+    --new-data new_data/new_activities_20251120_162717.csv \
     --data-source "Description of where/how data was obtained"
+```
+powershell
+```
+python evaluate_new_data.py --new-data new_data/new_activities_20251120_162717.csv --data-source "Description of where/how data was obtained"
 ```
 
 ### Step 3: Review Results
