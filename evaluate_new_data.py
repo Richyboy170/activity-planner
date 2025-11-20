@@ -163,6 +163,39 @@ class NewDataEvaluator:
                     new_state_dict[key] = value
             state_dict = new_state_dict
 
+        # Handle legacy layer ordering: Old model had Linear->ReLU->BatchNorm->Dropout
+        # New model has Linear->BatchNorm->ReLU->Dropout
+        # Need to remap BatchNorm layers from indices [2, 6, 10] to [1, 5, 9]
+        if 'network.2.weight' in state_dict and 'network.1.weight' not in state_dict:
+            logger.info("Detected legacy layer ordering - remapping BatchNorm layer indices")
+            # Mapping: old index -> new index for BatchNorm layers
+            # Old: [2, 6, 10] -> New: [1, 5, 9]
+            layer_mapping = {2: 1, 6: 5, 10: 9}
+
+            new_state_dict = {}
+            for key, value in state_dict.items():
+                if key.startswith('network.'):
+                    # Extract layer index
+                    parts = key.split('.')
+                    if len(parts) >= 2 and parts[1].isdigit():
+                        old_idx = int(parts[1])
+
+                        # Check if this is a BatchNorm layer that needs remapping
+                        if old_idx in layer_mapping:
+                            new_idx = layer_mapping[old_idx]
+                            new_key = f"network.{new_idx}.{'.'.join(parts[2:])}"
+                            new_state_dict[new_key] = value
+                            logger.debug(f"Remapped {key} -> {new_key}")
+                        else:
+                            # Keep other layers as is
+                            new_state_dict[key] = value
+                    else:
+                        new_state_dict[key] = value
+                else:
+                    new_state_dict[key] = value
+
+            state_dict = new_state_dict
+
         model.load_state_dict(state_dict)
         model.to(self.device)
         model.eval()
