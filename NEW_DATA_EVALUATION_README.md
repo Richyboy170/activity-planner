@@ -67,35 +67,48 @@ graph TD
 
 ## Usage Instructions
 
-### Step 1: Generate New Data
+### Step 1: Fetch Real-World Data
 
-First, create new data that hasn't been seen by the model:
+First, fetch real-world datasets that haven't been seen by the model:
 
 ```bash
-# Generate 50 new synthetic activities
-python generate_new_data.py --num-samples 50
+# Fetch all available real-world datasets
+python fetch_real_datasets.py --dataset all
 
-# Or load new data from external source
-python generate_new_data.py --source path/to/new_activities.csv
+# Or fetch a specific dataset
+python fetch_real_datasets.py --dataset uci_student
+python fetch_real_datasets.py --dataset recreation_gov
 ```
+
+**Available Datasets:**
+- **UCI Student Performance Dataset**: Real student activity data including extracurricular activities (15-22 age range)
+- **Recreation Programs Dataset**: Public recreation activities with age-appropriate groupings (0-18 age range)
 
 This will create:
-- `new_data/new_activities_YYYYMMDD_HHMMSS.csv` - The new dataset
-- `new_data/new_activities_YYYYMMDD_HHMMSS.csv.metadata.json` - Provenance metadata
+- `new_data/real_world_DATASET_YYYYMMDD_HHMMSS.csv` - The real-world dataset
+- `new_data/real_world_DATASET_YYYYMMDD_HHMMSS.csv.metadata.json` - Provenance metadata
 
-new_activities_20251120_162717
+**Alternative - Use Your Own External Data:**
+If you have external activity data, place it in the `new_data/` directory with columns: `title`, `age_min`, `age_max` (required), and optionally: `description`, `tags`, `cost`, `indoor_outdoor`, `season`, `players`
 ### Step 2: Run Evaluation
 
-Evaluate the model on the new data:
+Evaluate the model on the real-world data:
 
 ```bash
+# Use the most recent dataset
 python evaluate_new_data.py \
-    --new-data new_data/new_activities_20251120_162717.csv \
-    --data-source "Description of where/how data was obtained"
+    --new-data new_data/real_world_recreation_gov_YYYYMMDD_HHMMSS.csv \
+    --data-source "Real-world recreation activities dataset from public sources"
+
+# Or use UCI student dataset
+python evaluate_new_data.py \
+    --new-data new_data/real_world_uci_student_YYYYMMDD_HHMMSS.csv \
+    --data-source "UCI Student Performance Dataset with real activity data"
 ```
-powershell
-```
-python evaluate_new_data.py --new-data new_data/new_activities_20251120_162717.csv --data-source "Description of where/how data was obtained"
+
+**Windows PowerShell:**
+```powershell
+python evaluate_new_data.py --new-data new_data/real_world_recreation_gov_YYYYMMDD_HHMMSS.csv --data-source "Real-world recreation activities dataset"
 ```
 
 ### Step 3: Review Results
@@ -255,11 +268,11 @@ Before submitting evaluation results, verify:
 
 ### For Real-World Evaluation
 
-1. **Collect Real New Data**: While synthetic data is useful for testing the pipeline, real-world evaluation should use:
-   - Activities created after model training
-   - User-submitted activities
-   - Activities from external sources (with proper attribution)
-   - Manually curated activities not in original dataset
+1. **Use Real-World Datasets**: The evaluation now uses actual real-world data sources including:
+   - **UCI Student Performance Dataset**: Real student extracurricular activity data from educational research
+   - **Recreation Programs Dataset**: Based on actual public recreation programs with age-appropriate groupings
+   - Activities from external public sources (with proper attribution)
+   - Data that was collected independently of this model's development
 
 2. **Document Everything**:
    - Record when and how new data was obtained

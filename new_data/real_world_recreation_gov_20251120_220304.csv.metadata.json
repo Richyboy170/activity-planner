@@ -1,0 +1,41 @@
+{
+  "creation_date": "2025-11-20T22:03:04.948866",
+  "filename": "real_world_recreation_gov_20251120_220304.csv",
+  "dataset_name": "recreation_gov",
+  "num_samples": 50,
+  "purpose": "Model evaluation on real-world, unseen data",
+  "data_characteristics": {
+    "source": "Recreation Programs Dataset",
+    "not_used_in_training": true,
+    "not_used_in_validation": true,
+    "not_used_in_testing": true,
+    "not_used_for_hyperparameter_tuning": true,
+    "completely_new_data": true,
+    "real_world_data": true
+  },
+  "class_distribution": {
+    "toddler": 12,
+    "preschool": 11,
+    "elementary": 12,
+    "teen": 15
+  },
+  "columns": [
+    "title",
+    "description",
+    "age_min",
+    "age_max",
+    "tags",
+    "cost",
+    "indoor_outdoor",
+    "season",
+    "players",
+    "duration_mins",
+    "source",
+    "fetched_at"
+  ],
+  "dataset_info": {
+    "name": "Recreation.gov Activities",
+    "description": "Public recreation activities from government sources",
+    "source": "Data.gov and Recreation.gov"
+  }
+}
