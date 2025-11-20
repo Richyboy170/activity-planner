@@ -840,7 +840,7 @@ class NewDataEvaluator:
 
         # Save report
         report_path = self.results_dir / 'NEW_DATA_EVALUATION_REPORT.md'
-        with open(report_path, 'w') as f:
+        with open(report_path, 'w', encoding='utf-8') as f:
             f.write(report_content)
 
         logger.info(f"Report saved to {report_path}")
@@ -856,7 +856,7 @@ class NewDataEvaluator:
         }
 
         results_path = self.results_dir / 'new_data_evaluation_results.json'
-        with open(results_path, 'w') as f:
+        with open(results_path, 'w', encoding='utf-8') as f:
             json.dump(output, f, indent=2)
 
         logger.info(f"Results saved to {results_path}")
