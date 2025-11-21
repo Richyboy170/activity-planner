@@ -225,6 +225,80 @@ Path('evaluation_results').mkdir(exist_ok=True)
 with open('evaluation_results/results.json', 'w') as f:
     json.dump(results, f, indent=2)
 
+# Create markdown summary
+md_content = f"""# Evaluation Results
+
+## Dataset Information
+- **Total Samples**: {len(labels)}
+- **Embedding Model**: {embedding_model_name}
+- **Input Dimension**: {input_dim}
+
+## Class Distribution
+| Age Group | Count | Percentage |
+|-----------|-------|------------|
+"""
+
+for label, count in zip(unique, counts):
+    md_content += f"| {age_groups[label]} | {count} | {count/len(labels)*100:.1f}% |\n"
+
+md_content += f"""
+## Overall Metrics
+| Metric | Value |
+|--------|-------|
+| **Accuracy** | {accuracy:.4f} ({accuracy*100:.2f}%) |
+| **Precision** | {precision:.4f} |
+| **Recall** | {recall:.4f} |
+| **F1-Score** | {f1:.4f} |
+
+## Per-Class Performance
+| Age Group | Precision | Recall | F1-Score | Support |
+|-----------|-----------|--------|----------|---------|
+"""
+
+for i in range(4):
+    md_content += f"| {age_groups[i]} | {precision_per_class[i]:.4f} | {recall_per_class[i]:.4f} | {f1_per_class[i]:.4f} | {support_per_class[i]} |\n"
+
+md_content += f"""
+## Confusion Matrix
+|  | {age_groups[0]} | {age_groups[1]} | {age_groups[2]} | {age_groups[3]} |
+|--|{"--|".join(['-'*len(age_groups[i]) for i in range(4)])}--|
+"""
+
+for i in range(4):
+    row_values = " | ".join([str(conf_matrix[i][j]) for j in range(4)])
+    md_content += f"| **{age_groups[i]}** | {row_values} |\n"
+
+md_content += f"""
+## Prediction Confidence
+| Statistic | Value |
+|-----------|-------|
+| Mean | {np.mean(confidences):.4f} |
+| Std Dev | {np.std(confidences):.4f} |
+| Min | {np.min(confidences):.4f} |
+| Max | {np.max(confidences):.4f} |
+"""
+
+# Add baseline comparison if available
+try:
+    with open('test_results/test_report.json', 'r') as f:
+        baseline = json.load(f).get('neural_network', {})
+        baseline_acc = baseline.get('accuracy', 0)
+        diff = accuracy - baseline_acc
+        md_content += f"""
+## Baseline Comparison
+| Metric | Value |
+|--------|-------|
+| Baseline Test Accuracy | {baseline_acc:.4f} |
+| New Data Accuracy | {accuracy:.4f} |
+| Difference | {diff:+.4f} |
+"""
+except:
+    md_content += "\n## Baseline Comparison\nBaseline comparison not available.\n"
+
+with open('evaluation_results/summary.md', 'w') as f:
+    f.write(md_content)
+
 print("\n" + "="*80)
 print(f"✓ Results saved to evaluation_results/results.json")
+print(f"✓ Summary saved to evaluation_results/summary.md")
 print("="*80)
