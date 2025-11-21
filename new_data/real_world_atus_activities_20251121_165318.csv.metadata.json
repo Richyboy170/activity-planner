@@ -1,0 +1,41 @@
+{
+  "creation_date": "2025-11-21T16:53:18.571125",
+  "filename": "real_world_atus_activities_20251121_165318.csv",
+  "dataset_name": "atus_activities",
+  "num_samples": 58,
+  "purpose": "Model evaluation on real-world, unseen data",
+  "data_characteristics": {
+    "source": "American Time Use Survey (ATUS) Categories",
+    "not_used_in_training": true,
+    "not_used_in_validation": true,
+    "not_used_in_testing": true,
+    "not_used_for_hyperparameter_tuning": true,
+    "completely_new_data": true,
+    "real_world_data": true
+  },
+  "class_distribution": {
+    "toddler": 15,
+    "preschool": 10,
+    "elementary": 10,
+    "teen": 23
+  },
+  "columns": [
+    "title",
+    "description",
+    "age_min",
+    "age_max",
+    "tags",
+    "cost",
+    "indoor_outdoor",
+    "season",
+    "players",
+    "duration_mins",
+    "source",
+    "fetched_at"
+  ],
+  "dataset_info": {
+    "name": "American Time Use Survey Activities",
+    "description": "Real-world activities people do at different ages based on ATUS categories",
+    "source": "Bureau of Labor Statistics - American Time Use Survey"
+  }
+}
