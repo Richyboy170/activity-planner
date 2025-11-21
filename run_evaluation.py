@@ -12,25 +12,23 @@ from pathlib import Path
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support, confusion_matrix, classification_report
 
-# Neural Network Model
+# Neural Network Model (matches train_model.py architecture)
 class NeuralClassifier(nn.Module):
     def __init__(self, input_dim=384, hidden_dims=[256, 128, 64], num_classes=4, dropout=0.3):
         super(NeuralClassifier, self).__init__()
         layers = []
         prev_dim = input_dim
         for hidden_dim in hidden_dims:
-            layers.extend([
-                nn.Linear(prev_dim, hidden_dim),
-                nn.BatchNorm1d(hidden_dim),
-                nn.ReLU(),
-                nn.Dropout(dropout)
-            ])
+            layers.append(nn.Linear(prev_dim, hidden_dim))
+            layers.append(nn.ReLU())
+            layers.append(nn.BatchNorm1d(hidden_dim))
+            layers.append(nn.Dropout(dropout))
             prev_dim = hidden_dim
         layers.append(nn.Linear(prev_dim, num_classes))
-        self.network = nn.Sequential(*layers)
+        self.model = nn.Sequential(*layers)
 
     def forward(self, x):
-        return self.network(x)
+        return self.model(x)
 
 # Age group mapping
 age_groups = {
@@ -85,18 +83,11 @@ print("Class distribution:")
 for label, count in zip(unique, counts):
     print(f"  {age_groups[label]}: {count} samples ({count/len(labels)*100:.1f}%)")
 
-# Generate embeddings
-print("\n[3/5] Generating embeddings...")
-embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
-embeddings = embedding_model.encode(activity_texts, show_progress_bar=True)
-print(f"✓ Generated embeddings: {embeddings.shape}")
-
-# Load the model
-print("\n[4/5] Loading trained model...")
+# Load the model checkpoint first to determine input dimension
+print("\n[3/5] Loading trained model checkpoint...")
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(f"Using device: {device}")
 
-model = NeuralClassifier(input_dim=384, hidden_dims=[256, 128, 64], num_classes=4, dropout=0.3)
 checkpoint = torch.load('models/neural_classifier.pth', map_location=device)
 
 # Handle different checkpoint formats
@@ -105,17 +96,37 @@ if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
 else:
     state_dict = checkpoint
 
-# Handle legacy keys
-if any(key.startswith('model.') for key in state_dict.keys()):
-    new_state_dict = {}
-    for key, value in state_dict.items():
-        if key.startswith('model.'):
-            new_key = key.replace('model.', 'network.', 1)
-            new_state_dict[new_key] = value
-        else:
-            new_state_dict[key] = value
-    state_dict = new_state_dict
+# Detect input dimension from checkpoint
+first_layer_key = 'model.0.weight'
+if first_layer_key in state_dict:
+    input_dim = state_dict[first_layer_key].shape[1]
+    print(f"✓ Detected input dimension from checkpoint: {input_dim}")
+else:
+    print("⚠ Could not detect input dimension, using default 384")
+    input_dim = 384
 
+# Choose appropriate embedding model based on dimension
+if input_dim == 768:
+    embedding_model_name = 'all-mpnet-base-v2'
+elif input_dim == 384:
+    embedding_model_name = 'all-MiniLM-L6-v2'
+else:
+    print(f"⚠ Unusual input dimension {input_dim}, using all-MiniLM-L6-v2")
+    embedding_model_name = 'all-MiniLM-L6-v2'
+
+print(f"Using embedding model: {embedding_model_name}")
+
+# Generate embeddings
+print("\n[4/5] Generating embeddings...")
+embedding_model = SentenceTransformer(embedding_model_name)
+embeddings = embedding_model.encode(activity_texts, show_progress_bar=True)
+print(f"✓ Generated embeddings: {embeddings.shape}")
+
+# Create model with correct input dimension
+print(f"\nCreating model with input_dim={input_dim}...")
+model = NeuralClassifier(input_dim=input_dim, hidden_dims=[256, 128, 64], num_classes=4, dropout=0.3)
+
+# Load state dict
 model.load_state_dict(state_dict)
 model.to(device)
 model.eval()
