@@ -323,15 +323,17 @@ class NewDataEvaluator:
         )
 
         # Per-class metrics
+        all_labels = list(range(4))  # All possible class labels (0, 1, 2, 3)
         precision_per_class, recall_per_class, f1_per_class, support_per_class = \
-            precision_recall_fscore_support(true_labels, predictions, average=None, zero_division=0)
+            precision_recall_fscore_support(true_labels, predictions, labels=all_labels, average=None, zero_division=0)
 
         # Confusion matrix
-        conf_matrix = confusion_matrix(true_labels, predictions)
+        conf_matrix = confusion_matrix(true_labels, predictions, labels=all_labels)
 
         # Classification report
         class_report = classification_report(
             true_labels, predictions,
+            labels=all_labels,
             target_names=[self.age_groups[i] for i in range(4)],
             output_dict=True,
             zero_division=0
