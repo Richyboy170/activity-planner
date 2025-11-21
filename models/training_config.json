@@ -1,0 +1,16 @@
+{
+  "dataset_path": "dataset/dataset.csv",
+  "output_dir": "models",
+  "sentence_bert_model": "all-MiniLM-L6-v2",
+  "bm25_k1": 1.5,
+  "bm25_b": 0.75,
+  "embedding_batch_size": 32,
+  "normalize_embeddings": true,
+  "show_progress": true,
+  "use_gpu": false,
+  "faiss_metric": "L2",
+  "rrf_k": 60,
+  "weight_retrieval": 0.4,
+  "weight_age_fit": 0.3,
+  "weight_preference": 0.3
+}
