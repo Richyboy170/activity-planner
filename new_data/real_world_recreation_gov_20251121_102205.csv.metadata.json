@@ -1,8 +1,8 @@
 {
-  "creation_date": "2025-11-20T22:03:04.948866",
-  "filename": "real_world_recreation_gov_20251120_220304.csv",
+  "creation_date": "2025-11-21T10:22:05.889684",
+  "filename": "real_world_recreation_gov_20251121_102205.csv",
   "dataset_name": "recreation_gov",
-  "num_samples": 50,
+  "num_samples": 46,
   "purpose": "Model evaluation on real-world, unseen data",
   "data_characteristics": {
     "source": "Recreation Programs Dataset",
@@ -14,10 +14,10 @@
     "real_world_data": true
   },
   "class_distribution": {
-    "toddler": 12,
-    "preschool": 11,
-    "elementary": 12,
-    "teen": 15
+    "toddler": 11,
+    "preschool": 10,
+    "elementary": 11,
+    "teen": 14
   },
   "columns": [
     "title",

@@ -1,0 +1,43 @@
+{
+  "creation_date": "2025-11-21T10:22:05.875345",
+  "filename": "real_world_uci_student_20251121_102205.csv",
+  "dataset_name": "uci_student",
+  "num_samples": 29,
+  "purpose": "Model evaluation on real-world, unseen data",
+  "data_characteristics": {
+    "source": "UCI Student Performance Dataset",
+    "not_used_in_training": true,
+    "not_used_in_validation": true,
+    "not_used_in_testing": true,
+    "not_used_for_hyperparameter_tuning": true,
+    "completely_new_data": true,
+    "real_world_data": true
+  },
+  "class_distribution": {
+    "toddler": 0,
+    "preschool": 0,
+    "elementary": 0,
+    "teen": 29
+  },
+  "columns": [
+    "title",
+    "description",
+    "age_min",
+    "age_max",
+    "tags",
+    "cost",
+    "indoor_outdoor",
+    "season",
+    "players",
+    "duration_mins",
+    "source",
+    "dataset_url",
+    "fetched_at"
+  ],
+  "dataset_info": {
+    "name": "UCI Student Performance Dataset",
+    "url": "https://archive.ics.uci.edu/ml/machine-learning-databases/00320/student.zip",
+    "description": "Student performance data including age and extracurricular activities",
+    "source": "UCI Machine Learning Repository"
+  }
+}

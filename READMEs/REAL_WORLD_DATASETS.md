@@ -121,13 +121,17 @@ python fetch_real_datasets.py --dataset all --output-dir path/to/directory
 ```bash
 # Evaluate on UCI student dataset
 python evaluate_new_data.py \
-    --new-data new_data/real_world_uci_student_20251120_120000.csv \
+    --new-data new_data/real_world_uci_student_20251121_102205.csv \
     --data-source "UCI Student Performance Dataset - Real student activity data"
+
+    real_world_uci_student_20251121_102205
 
 # Evaluate on recreation dataset
 python evaluate_new_data.py \
-    --new-data new_data/real_world_recreation_gov_20251120_120000.csv \
+    --new-data new_data/real_world_recreation_gov_20251121_102205.csv \
     --data-source "Recreation Programs Dataset - Public recreation activities"
+
+    real_world_recreation_gov_20251121_102205
 ```
 
 ## Dataset Comparison
