@@ -1,0 +1,219 @@
+"""
+Simple Evaluation Script for New Data
+Evaluates the trained model on evaluation_dataset.csv
+"""
+
+import torch
+import torch.nn as nn
+import numpy as np
+import pandas as pd
+import json
+from pathlib import Path
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics import accuracy_score, precision_recall_fscore_support, confusion_matrix, classification_report
+
+# Neural Network Model
+class NeuralClassifier(nn.Module):
+    def __init__(self, input_dim=384, hidden_dims=[256, 128, 64], num_classes=4, dropout=0.3):
+        super(NeuralClassifier, self).__init__()
+        layers = []
+        prev_dim = input_dim
+        for hidden_dim in hidden_dims:
+            layers.extend([
+                nn.Linear(prev_dim, hidden_dim),
+                nn.BatchNorm1d(hidden_dim),
+                nn.ReLU(),
+                nn.Dropout(dropout)
+            ])
+            prev_dim = hidden_dim
+        layers.append(nn.Linear(prev_dim, num_classes))
+        self.network = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.network(x)
+
+# Age group mapping
+age_groups = {
+    0: 'Toddler (0-3)',
+    1: 'Preschool (4-6)',
+    2: 'Elementary (7-10)',
+    3: 'Teen+ (11+)'
+}
+
+print("="*80)
+print("EVALUATION ON NEW DATA")
+print("="*80)
+
+# Load the evaluation dataset
+print("\n[1/5] Loading evaluation dataset...")
+df = pd.read_csv('dataset/evaluation_dataset.csv')
+print(f"✓ Loaded {len(df)} samples")
+
+# Create activity text representations
+print("\n[2/5] Creating activity representations...")
+activity_texts = []
+for _, row in df.iterrows():
+    text_parts = []
+    if pd.notna(row.get('title')):
+        text_parts.extend([str(row['title'])] * 3)
+    if pd.notna(row.get('tags')):
+        text_parts.extend([str(row['tags'])] * 2)
+    if pd.notna(row.get('description')):
+        text_parts.append(str(row['description']))
+    for field in ['cost', 'indoor_outdoor', 'season', 'players']:
+        if field in df.columns and pd.notna(row.get(field)):
+            text_parts.append(f"{field}: {row[field]}")
+    activity_texts.append(' '.join(text_parts))
+
+# Derive labels from age ranges
+labels = []
+for _, row in df.iterrows():
+    age_min = row['age_min']
+    if age_min <= 3:
+        labels.append(0)
+    elif age_min <= 6:
+        labels.append(1)
+    elif age_min <= 10:
+        labels.append(2)
+    else:
+        labels.append(3)
+labels = np.array(labels)
+
+# Class distribution
+unique, counts = np.unique(labels, return_counts=True)
+print("Class distribution:")
+for label, count in zip(unique, counts):
+    print(f"  {age_groups[label]}: {count} samples ({count/len(labels)*100:.1f}%)")
+
+# Generate embeddings
+print("\n[3/5] Generating embeddings...")
+embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+embeddings = embedding_model.encode(activity_texts, show_progress_bar=True)
+print(f"✓ Generated embeddings: {embeddings.shape}")
+
+# Load the model
+print("\n[4/5] Loading trained model...")
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+print(f"Using device: {device}")
+
+model = NeuralClassifier(input_dim=384, hidden_dims=[256, 128, 64], num_classes=4, dropout=0.3)
+checkpoint = torch.load('models/neural_classifier.pth', map_location=device)
+
+# Handle different checkpoint formats
+if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
+    state_dict = checkpoint['model_state_dict']
+else:
+    state_dict = checkpoint
+
+# Handle legacy keys
+if any(key.startswith('model.') for key in state_dict.keys()):
+    new_state_dict = {}
+    for key, value in state_dict.items():
+        if key.startswith('model.'):
+            new_key = key.replace('model.', 'network.', 1)
+            new_state_dict[new_key] = value
+        else:
+            new_state_dict[key] = value
+    state_dict = new_state_dict
+
+model.load_state_dict(state_dict)
+model.to(device)
+model.eval()
+print("✓ Model loaded successfully")
+
+# Evaluate
+print("\n[5/5] Running evaluation...")
+X = torch.FloatTensor(embeddings).to(device)
+
+with torch.no_grad():
+    outputs = model(X)
+    probabilities = torch.softmax(outputs, dim=1)
+    predictions = outputs.argmax(dim=1).cpu().numpy()
+    confidences = probabilities.max(dim=1)[0].cpu().numpy()
+
+# Calculate metrics
+accuracy = accuracy_score(labels, predictions)
+precision, recall, f1, _ = precision_recall_fscore_support(labels, predictions, average='weighted', zero_division=0)
+
+print("\n" + "="*80)
+print("EVALUATION RESULTS")
+print("="*80)
+print(f"\nOverall Metrics:")
+print(f"  Accuracy:  {accuracy:.4f} ({accuracy*100:.2f}%)")
+print(f"  Precision: {precision:.4f}")
+print(f"  Recall:    {recall:.4f}")
+print(f"  F1-Score:  {f1:.4f}")
+
+print(f"\nPrediction Confidence:")
+print(f"  Mean: {np.mean(confidences):.4f}")
+print(f"  Min:  {np.min(confidences):.4f}")
+print(f"  Max:  {np.max(confidences):.4f}")
+
+# Per-class metrics
+print(f"\nPer-Class Performance:")
+all_labels = list(range(4))
+precision_per_class, recall_per_class, f1_per_class, support_per_class = \
+    precision_recall_fscore_support(labels, predictions, labels=all_labels, average=None, zero_division=0)
+
+for i in range(4):
+    print(f"  {age_groups[i]}:")
+    print(f"    Precision: {precision_per_class[i]:.4f}")
+    print(f"    Recall:    {recall_per_class[i]:.4f}")
+    print(f"    F1-Score:  {f1_per_class[i]:.4f}")
+    print(f"    Support:   {support_per_class[i]}")
+
+# Confusion Matrix
+print(f"\nConfusion Matrix:")
+conf_matrix = confusion_matrix(labels, predictions, labels=all_labels)
+print("         | " + " | ".join([f"{age_groups[i][:10]:^10}" for i in range(4)]))
+print("-" * 60)
+for i in range(4):
+    row = f"{age_groups[i][:10]:^10} | " + " | ".join([f"{conf_matrix[i][j]:^10}" for j in range(4)])
+    print(row)
+
+# Load baseline and compare
+try:
+    with open('test_results/test_report.json', 'r') as f:
+        baseline = json.load(f).get('neural_network', {})
+        baseline_acc = baseline.get('accuracy', 0)
+        print(f"\nComparison with Baseline:")
+        print(f"  Baseline Test Accuracy: {baseline_acc:.4f}")
+        print(f"  New Data Accuracy:      {accuracy:.4f}")
+        print(f"  Difference:             {accuracy - baseline_acc:+.4f}")
+except:
+    print("\nBaseline comparison not available")
+
+# Save results
+results = {
+    'overall_metrics': {
+        'accuracy': float(accuracy),
+        'precision': float(precision),
+        'recall': float(recall),
+        'f1_score': float(f1),
+        'num_samples': len(labels)
+    },
+    'per_class_metrics': {
+        age_groups[i]: {
+            'precision': float(precision_per_class[i]),
+            'recall': float(recall_per_class[i]),
+            'f1_score': float(f1_per_class[i]),
+            'support': int(support_per_class[i])
+        }
+        for i in range(4)
+    },
+    'confusion_matrix': conf_matrix.tolist(),
+    'confidence_stats': {
+        'mean': float(np.mean(confidences)),
+        'std': float(np.std(confidences)),
+        'min': float(np.min(confidences)),
+        'max': float(np.max(confidences))
+    }
+}
+
+Path('evaluation_results').mkdir(exist_ok=True)
+with open('evaluation_results/results.json', 'w') as f:
+    json.dump(results, f, indent=2)
+
+print("\n" + "="*80)
+print(f"✓ Results saved to evaluation_results/results.json")
+print("="*80)
