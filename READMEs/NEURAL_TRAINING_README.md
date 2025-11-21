@@ -41,6 +41,10 @@ pip install torch torchvision torchaudio --index-url https://download.pytorch.or
 ### Other Dependencies (should already be installed)
 ```bash
 pip install scikit-learn tqdm pandas numpy
+
+
+pip install -r requirements.txt
+
 ```
 
 ## Usage

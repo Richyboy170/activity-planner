@@ -1,4 +1,6 @@
 """
+--NOT USED ANYMORE--
+
 Generate New Data for Model Evaluation
 
 This script generates completely new activity data that has not been seen
