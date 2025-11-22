@@ -376,7 +376,7 @@ class NeuralTrainer:
         logger.info(f"  Input dimension: {input_dim}")
         logger.info(f"  Number of classes: {num_classes}")
 
-        hidden_dims = [256, 128, 64, 32, 16]
+        hidden_dims = [512, 512, 384, 384, 256, 256, 128, 128, 64, 64]
         self.model = ActivityClassifier(input_dim, hidden_dims, num_classes, dropout=0.3)
         self.model.to(self.device)
 
@@ -385,7 +385,7 @@ class NeuralTrainer:
         trainable_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
 
         logger.info(f"✓ Model built with {trainable_params:,} trainable parameters")
-        logger.info(f"  Architecture: {input_dim} -> 256 -> 128 -> 64 -> 32 -> 16 -> {num_classes}")
+        logger.info(f"  Architecture: {input_dim} -> 512 -> 512 -> 384 -> 384 -> 256 -> 256 -> 128 -> 128 -> 64 -> 64 -> {num_classes}")
 
     def train_epoch(self, optimizer, criterion, epoch: int, num_epochs: int):
         """Train for one epoch with batch-wise loss display"""
