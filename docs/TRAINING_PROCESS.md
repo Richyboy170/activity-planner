@@ -48,7 +48,7 @@ The Activity Planner uses a **hybrid AI system** combining:
 ┌─────────────────────────────────────────────────────────────┐
 │  Step 1: Load Dataset (dataset/dataset.csv)                 │
 │  - Parse CSV with activity data                             │
-│  - Load 2,092 activities                                    │
+│  - Load 1,069 activities                                    │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -105,7 +105,7 @@ The Activity Planner uses a **hybrid AI system** combining:
 
 ### Input Dataset: `dataset/dataset.csv`
 
-**Location**: `train_model.py:542-666` (ModelTrainer class)
+**Location**: `train_model.py:542-665` (ModelTrainer class)
 
 **Schema** (11 columns):
 
@@ -126,7 +126,7 @@ The Activity Planner uses a **hybrid AI system** combining:
 
 ### How Data is Loaded
 
-**Code**: `train_model.py:107-139` (ActivityDataProcessor.create_text_column)
+**Code**: `train_model.py:108-139` (ActivityDataProcessor.create_text_representations)
 
 ```python
 def load_dataset(csv_path):
@@ -219,8 +219,8 @@ CSV Dataset
 **File**: `train_model.py:552`
 
 ```python
-df = data_processor.load_dataset(args.dataset)
-# Loads 2,092 activities from CSV
+df = data_processor.load_dataset()
+# Loads 1,069 activities from CSV
 # Creates weighted text representation for each activity
 ```
 
@@ -229,7 +229,7 @@ df = data_processor.load_dataset(args.dataset)
 ---
 
 #### Step 2: Build BM25 Index
-**File**: `train_model.py:557-561`
+**File**: `train_model.py:569-571`
 
 **What is BM25?**
 - **BM25** (Best Match 25) is a keyword-based ranking algorithm
@@ -247,7 +247,7 @@ bm25_indexer.save(output_dir)
 - `k1=1.5`: Term saturation (how quickly term frequency impact saturates)
 - `b=0.75`: Length normalization (penalize very long documents)
 
-**What Happens Internally** (`train_model.py:142-187`):
+**What Happens Internally** (`train_model.py:150-186`):
 1. **Tokenization**: Split text into words
    ```python
    tokens = text.lower().split()
@@ -261,12 +261,12 @@ bm25_indexer.save(output_dir)
    ```
 4. **Save State**: Pickle tokenized docs and metadata
 
-**Output**: `models/bm25_docs.pkl` (733 KB)
+**Output**: `models/bm25_docs.pkl` (size varies by dataset)
 
 ---
 
 #### Step 3: Generate Embeddings
-**File**: `train_model.py:564-571`
+**File**: `train_model.py:574-578`
 
 **What are Sentence-BERT Embeddings?**
 - Dense vector representations (384 dimensions)
@@ -284,7 +284,7 @@ dense_embedder.save(output_dir)
 - `all-MiniLM-L6-v2`: Fast, 384 dimensions (default)
 - `all-mpnet-base-v2`: Higher quality, 768 dimensions (slower)
 
-**What Happens Internally** (`train_model.py:189-271`):
+**What Happens Internally** (`train_model.py:198-270`):
 1. **Load Pre-trained Model**:
    ```python
    from sentence_transformers import SentenceTransformer
@@ -293,7 +293,7 @@ dense_embedder.save(output_dir)
 2. **Encode Activities**: Convert text to vectors
    ```python
    embeddings = model.encode(texts, batch_size=32, show_progress_bar=True)
-   # Shape: (2092, 384)
+   # Shape: (1069, 384)
    ```
 3. **Normalize Vectors**: For cosine similarity
    ```python
@@ -306,17 +306,17 @@ dense_embedder.save(output_dir)
    ```
 
 **Output**:
-- `models/embeddings.npy` (3.2 MB): All activity vectors
-- `models/faiss_index.bin` (3.2 MB): Fast search index
+- `models/embeddings.npy`: All activity vectors (size varies by dataset)
+- `models/faiss_index.bin`: Fast search index (size varies by dataset)
 
 ---
 
 #### Step 4: Train Neural Network
-**File**: `train_model.py:576-583`
+**File**: `train_model.py:586-593`
 
 **Purpose**: Classify activities into age-appropriate categories
 
-**Label Generation** (`train_model.py:327-371`):
+**Label Generation** (`train_model.py:327-345`):
 ```python
 def age_to_label(age_min):
     if age_min <= 3:   return 0  # Toddler
@@ -330,15 +330,17 @@ labels = df['age_min'].apply(age_to_label)
 **Data Splitting**:
 ```python
 # 80% train, 10% validation, 10% test
-X_train, X_temp, y_train, y_temp = train_test_split(
+# First split: 90% temp, 10% test
+X_temp, X_test, y_temp, y_test = train_test_split(
     embeddings, labels,
-    test_size=0.2,
+    test_size=0.10,
     stratify=labels,  # Ensure balanced splits
     random_state=42
 )
-X_val, X_test, y_val, y_test = train_test_split(
+# Second split: ~80% train, ~10% validation (0.111 * 0.90 ≈ 0.10)
+X_train, X_val, y_train, y_val = train_test_split(
     X_temp, y_temp,
-    test_size=0.5,
+    test_size=0.111,
     stratify=y_temp,
     random_state=42
 )
@@ -357,7 +359,7 @@ trainer.train(epochs=10, save_path=f"{output_dir}/neural_classifier.pth")
 
 ### Neural Network Classifier
 
-**File**: `train_model.py:287-311`
+**File**: `train_model.py:287-310`
 
 **Architecture**:
 ```
@@ -394,29 +396,27 @@ Output Layer
 **PyTorch Code**:
 ```python
 class ActivityClassifier(nn.Module):
-    def __init__(self, input_dim=384, num_classes=4):
-        super().__init__()
-        self.network = nn.Sequential(
-            nn.Linear(input_dim, 256),
-            nn.ReLU(),
-            nn.BatchNorm1d(256),
-            nn.Dropout(0.3),
+    def __init__(self, input_dim: int, hidden_dims: List[int], num_classes: int, dropout: float = 0.3):
+        super(ActivityClassifier, self).__init__()
 
-            nn.Linear(256, 128),
-            nn.ReLU(),
-            nn.BatchNorm1d(128),
-            nn.Dropout(0.3),
+        layers = []
+        prev_dim = input_dim
 
-            nn.Linear(128, 64),
-            nn.ReLU(),
-            nn.BatchNorm1d(64),
-            nn.Dropout(0.3),
+        # Build hidden layers
+        for hidden_dim in hidden_dims:
+            layers.append(nn.Linear(prev_dim, hidden_dim))
+            layers.append(nn.ReLU())
+            layers.append(nn.BatchNorm1d(hidden_dim))
+            layers.append(nn.Dropout(dropout))
+            prev_dim = hidden_dim
 
-            nn.Linear(64, num_classes)
-        )
+        # Output layer
+        layers.append(nn.Linear(prev_dim, num_classes))
+
+        self.model = nn.Sequential(*layers)
 
     def forward(self, x):
-        return self.network(x)
+        return self.model(x)
 ```
 
 **Component Explanation**:
@@ -441,7 +441,7 @@ class ActivityClassifier(nn.Module):
 
 ### Training Configuration
 
-**File**: `train_model.py:475-516`
+**File**: `train_model.py:475-515`
 
 **Hyperparameters**:
 ```python
@@ -524,13 +524,15 @@ Epoch 1/10: 100%|████████| 53/53 [00:02<00:00] batch_loss: 1.284
 ```
 
 **Breakdown**:
-- `53/53`: 53 batches (1673 train samples / 32 batch size)
+- `53/53`: Number of batches (varies based on train set size ~855 samples / 32 batch size ≈ 27 batches)
 - `batch_loss`: Loss for current batch
 - `avg_loss`: Running average across all batches
 
+Note: The exact number of batches depends on the dataset size and random split.
+
 #### Phase 2: Validation
 
-**File**: `train_model.py:426-449`
+**File**: `train_model.py:426-449` (validate method)
 
 ```python
 model.eval()  # Switch to evaluation mode (disables dropout)
@@ -561,19 +563,15 @@ accuracy = 100 * correct / total
 
 #### Phase 3: Model Saving
 
-**File**: `train_model.py:509-514`
+**File**: `train_model.py:501-503` (within train method)
 
 ```python
 if val_loss < best_val_loss:
     best_val_loss = val_loss
-    torch.save({
-        'model_state_dict': model.state_dict(),
-        'optimizer_state_dict': optimizer.state_dict(),
-        'epoch': epoch,
-        'val_loss': val_loss
-    }, save_path)
-    print(f"  ✓ New best validation loss! Saving model...")
+    logger.info(f"  ✓ New best validation loss! Saving model...")
 ```
+
+Note: The model is saved at the end via the save() method (lines 517-539), not during training.
 
 **Why Save on Best Validation Loss?**
 - Model might overfit in later epochs
@@ -586,7 +584,7 @@ if val_loss < best_val_loss:
 
 ### Complete Training Loop
 
-**File**: `train_model.py:475-516`
+**File**: `train_model.py:475-515`
 
 ```python
 def train(self, epochs=10, save_path='model.pth'):
@@ -653,7 +651,7 @@ Test Accuracy: 67.78%
 
 ### Training History Analysis
 
-**Actual Results** (from `models/training_history.json`):
+**Example Results** (typical output from `models/training_history.json`):
 
 | Epoch | Train Loss | Val Loss | Val Accuracy |
 |-------|------------|----------|--------------|
@@ -690,7 +688,7 @@ print(f"Test Loss: {test_loss:.4f}")
 print(f"Test Accuracy: {test_acc:.2f}%")
 ```
 
-**Test Set**: 10% of data (209 activities) held out during entire training
+**Test Set**: 10% of data (~107 activities) held out during entire training
 
 ---
 
@@ -1004,15 +1002,15 @@ def calculate_linkage_score(activity, group_members, retrieval_score):
 
 **Files Created**:
 
-| File | Size | Purpose |
-|------|------|---------|
-| `bm25_docs.pkl` | 733 KB | Tokenized documents for BM25 search |
-| `embeddings.npy` | 3.2 MB | Sentence-BERT embeddings (2092×384) |
-| `faiss_index.bin` | 3.2 MB | FAISS index for fast similarity search |
-| `neural_classifier.pth` | 969 KB | Trained PyTorch model weights |
-| `training_history.json` | 2 KB | Loss curves and accuracy per epoch |
-| `training_config.json` | 1 KB | Hyperparameters used |
-| `activities_processed.csv` | 314 KB | Dataset with 'text' column added |
+| File | Purpose | Size (varies) |
+|------|---------|---------------|
+| `bm25_docs.pkl` | Tokenized documents for BM25 search | ~400-800 KB |
+| `embeddings.npy` | Sentence-BERT embeddings (1069×384) | ~1.6 MB |
+| `faiss_index.bin` | FAISS index for fast similarity search | ~1.6 MB |
+| `neural_classifier.pth` | Trained PyTorch model weights | ~500-1000 KB |
+| `training_history.json` | Loss curves and accuracy per epoch | ~2 KB |
+| `training_config.json` | Hyperparameters used | ~1 KB |
+| `activities_processed.csv` | Dataset with 'text' column added | ~150-300 KB |
 
 ### Model Checkpoint Structure
 
@@ -1041,7 +1039,7 @@ model.eval()
 ### High-Level Overview
 
 ```
-1. CSV Dataset (2,092 activities)
+1. CSV Dataset (1,069 activities)
    ↓
 2. Text Processing (weighted representation)
    ↓
@@ -1083,19 +1081,29 @@ model.eval()
 
 | Component | File | Lines |
 |-----------|------|-------|
-| ModelTrainer | train_model.py | 542-666 |
+| ModelTrainer | train_model.py | 542-665 |
 | ActivityDataProcessor | train_model.py | 87-139 |
-| BM25Indexer | train_model.py | 142-187 |
-| DenseEmbedder | train_model.py | 189-271 |
-| ActivityClassifier | train_model.py | 287-311 |
-| NeuralTrainer | train_model.py | 313-516 |
+| BM25Indexer | train_model.py | 142-186 |
+| DenseEmbedder | train_model.py | 189-270 |
+| ActivityClassifier | train_model.py | 287-310 |
+| NeuralTrainer | train_model.py | 313-539 |
 | train_epoch | train_model.py | 390-424 |
 | validate | train_model.py | 426-449 |
+| test | train_model.py | 451-473 |
 | Evaluation Script | run_evaluation.py | Full file |
 | Production App | app_optimized.py | Full file |
 
 ---
 
-**Document Version**: 1.0
-**Last Updated**: 2025-11-22
+**Document Version**: 1.1
+**Last Updated**: 2025-11-22 (Corrected)
 **Author**: Activity Planner Training System
+
+**Changelog v1.1**:
+- Corrected activity count from 2,092 to 1,069 (actual dataset size)
+- Fixed line number references to match actual code
+- Corrected method name from create_text_column to create_text_representations
+- Updated data split calculations to match actual implementation
+- Clarified that file sizes and training metrics are examples that vary
+- Updated PyTorch model code to match actual dynamic implementation
+- Fixed embedding dimensions and calculations throughout
