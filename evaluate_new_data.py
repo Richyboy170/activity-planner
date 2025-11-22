@@ -47,7 +47,7 @@ logger = logging.getLogger(__name__)
 class NeuralClassifier(nn.Module):
     """Neural network classifier for age group classification."""
 
-    def __init__(self, input_dim=384, hidden_dims=[256, 128, 64, 32, 16], num_classes=4, dropout=0.3):
+    def __init__(self, input_dim=384, hidden_dims=[512, 512, 384, 384, 256, 256, 128, 128, 64, 64], num_classes=4, dropout=0.3):
         super(NeuralClassifier, self).__init__()
 
         layers = []
@@ -132,7 +132,7 @@ class NewDataEvaluator:
         # Initialize model with same architecture as training
         model = NeuralClassifier(
             input_dim=384,
-            hidden_dims=[256, 128, 64, 32, 16],
+            hidden_dims=[512, 512, 384, 384, 256, 256, 128, 128, 64, 64],
             num_classes=4,
             dropout=0.3
         )

@@ -236,7 +236,7 @@ class ModelTester:
         print("="*60)
 
         # Model architecture (must match training)
-        hidden_dims = [256, 128, 64]
+        hidden_dims = [512, 512, 384, 384, 256, 256, 128, 128, 64, 64]
 
         # Check if model exists
         model_path = Path(model_path)
@@ -348,7 +348,7 @@ class ModelTester:
         print(f"Using device: {device}")
 
         # Model architecture (must match training)
-        hidden_dims = [256, 128, 64]
+        hidden_dims = [512, 512, 384, 384, 256, 256, 128, 128, 64, 64]
 
         # Create model
         model = ActivityClassifier(input_dim=384, hidden_dims=hidden_dims, num_classes=4).to(device)
