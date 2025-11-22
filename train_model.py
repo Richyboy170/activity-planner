@@ -333,18 +333,22 @@ class NeuralTrainer:
         """Split data into train/validation/test sets with balanced age group distribution"""
         logger.info("\n[Neural Network] Preparing train/validation/test split with balanced distribution...")
 
-        # Create labels based on age groups
+        # Create labels based on age groups using age midpoint for better accuracy
         # Toddler (0-3): 0, Preschool (4-6): 1, Elementary (7-10): 2, Teen+ (11+): 3
         labels = []
         label_names = ['Toddler (0-3)', 'Preschool (4-6)', 'Elementary (7-10)', 'Teen+ (11+)']
 
         for idx, row in df_activities.iterrows():
+            # Use midpoint of age range for more accurate classification
             age_min = row['age_min']
-            if age_min <= 3:
+            age_max = row['age_max']
+            age_mid = (age_min + age_max) / 2
+
+            if age_mid <= 3.5:
                 labels.append(0)  # Toddler
-            elif age_min <= 6:
+            elif age_mid <= 7:
                 labels.append(1)  # Preschool
-            elif age_min <= 10:
+            elif age_mid <= 11:
                 labels.append(2)  # Elementary
             else:
                 labels.append(3)  # Teen+
@@ -397,6 +401,10 @@ class NeuralTrainer:
 
         logger.info("\n✓ Balanced distribution ensured: Each epoch will see the same proportion of age groups")
 
+        # Store class counts for weighted loss calculation
+        self.class_counts = counts.copy()
+        self.num_classes = len(np.unique(labels))
+
         return len(np.unique(labels))
 
     def build_model(self, input_dim: int, num_classes: int):
@@ -405,8 +413,10 @@ class NeuralTrainer:
         logger.info(f"  Input dimension: {input_dim}")
         logger.info(f"  Number of classes: {num_classes}")
 
-        hidden_dims = [512, 512, 384, 384, 256, 256, 128, 128, 64, 64]
-        self.model = ActivityClassifier(input_dim, hidden_dims, num_classes, dropout=0.3)
+        # Simplified architecture to reduce overfitting (was 10 layers with 140K params)
+        # Now using 2 hidden layers with stronger regularization
+        hidden_dims = [256, 128]
+        self.model = ActivityClassifier(input_dim, hidden_dims, num_classes, dropout=0.5)
         self.model.to(self.device)
 
         # Count parameters
@@ -414,7 +424,8 @@ class NeuralTrainer:
         trainable_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
 
         logger.info(f"✓ Model built with {trainable_params:,} trainable parameters")
-        logger.info(f"  Architecture: {input_dim} -> 512 -> 512 -> 384 -> 384 -> 256 -> 256 -> 128 -> 128 -> 64 -> 64 -> {num_classes}")
+        logger.info(f"  Architecture: {input_dim} -> {' -> '.join(map(str, hidden_dims))} -> {num_classes}")
+        logger.info(f"  Dropout: 0.5 (increased from 0.3 for better generalization)")
 
     def train_epoch(self, optimizer, criterion, epoch: int, num_epochs: int):
         """Train for one epoch with batch-wise loss display"""
@@ -508,7 +519,18 @@ class NeuralTrainer:
         logger.info(f"  Device: {self.device}")
         logger.info("="*70)
 
-        criterion = nn.CrossEntropyLoss()
+        # Calculate class weights inversely proportional to frequency
+        # This helps the model pay more attention to minority classes
+        class_weights = 1.0 / torch.tensor(self.class_counts, dtype=torch.float32)
+        class_weights = class_weights / class_weights.sum() * self.num_classes  # Normalize
+        class_weights = class_weights.to(self.device)
+
+        logger.info(f"\n  Class Weights (to address imbalance):")
+        label_names = ['Toddler (0-3)', 'Preschool (4-6)', 'Elementary (7-10)', 'Teen+ (11+)']
+        for i, weight in enumerate(class_weights):
+            logger.info(f"    {label_names[i]}: {weight:.4f}")
+
+        criterion = nn.CrossEntropyLoss(weight=class_weights)
         optimizer = optim.Adam(self.model.parameters(), lr=learning_rate, weight_decay=1e-5)
 
         best_val_loss = float('inf')
