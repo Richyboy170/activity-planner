@@ -165,12 +165,12 @@ class NewDataEvaluator:
 
         # Handle legacy layer ordering: Old model had Linear->ReLU->BatchNorm->Dropout
         # New model has Linear->BatchNorm->ReLU->Dropout
-        # Need to remap BatchNorm layers from indices [2, 6, 10] to [1, 5, 9]
+        # Need to remap BatchNorm layers for all 10 hidden layers
         if 'network.2.weight' in state_dict and 'network.1.weight' not in state_dict:
             logger.info("Detected legacy layer ordering - remapping BatchNorm layer indices")
-            # Mapping: old index -> new index for BatchNorm layers
-            # Old: [2, 6, 10] -> New: [1, 5, 9]
-            layer_mapping = {2: 1, 6: 5, 10: 9}
+            # Mapping: old index -> new index for BatchNorm layers (all 10 hidden layers)
+            # Old: [2, 6, 10, 14, 18, 22, 26, 30, 34, 38] -> New: [1, 5, 9, 13, 17, 21, 25, 29, 33, 37]
+            layer_mapping = {2: 1, 6: 5, 10: 9, 14: 13, 18: 17, 22: 21, 26: 25, 30: 29, 34: 33, 38: 37}
 
             new_state_dict = {}
             for key, value in state_dict.items():
