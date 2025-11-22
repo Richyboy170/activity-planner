@@ -1,7 +1,7 @@
 {
   "dataset_path": "dataset/dataset.csv",
   "output_dir": "models",
-  "sentence_bert_model": "all-MiniLM-L6-v2",
+  "sentence_bert_model": "all-mpnet-base-v2",
   "bm25_k1": 1.5,
   "bm25_b": 0.75,
   "embedding_batch_size": 32,

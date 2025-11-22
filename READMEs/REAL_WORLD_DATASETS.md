@@ -132,6 +132,13 @@ python evaluate_new_data.py \
     --data-source "Recreation Programs Dataset - Public recreation activities"
 
     real_world_recreation_gov_20251121_102205
+
+# Evaluate on evaluation_dataset.csv
+python evaluate_new_data.py \
+    --new-data dataset/evaluation_dataset.csv \
+    --data-source "evaluation"
+
+    evaluation_dataset.csv
 ```
 
 ## Dataset Comparison

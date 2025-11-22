@@ -57,6 +57,16 @@ python train_model.py
 # Custom parameters
 python train_model.py --dataset dataset/dataset.csv --output-dir models --model all-MiniLM-L6-v2
 
+
+# Option 1: Best quality (recommended)
+python train_model.py --model all-mpnet-base-v2
+
+# Option 2: Optimized for Q&A
+python train_model.py --model multi-qa-mpnet-base-dot-v1
+
+# Option 3: Balanced improvement
+python train_model.py --model all-MiniLM-L12-v2
+
 # Training will now include:
 # - Step 6/7: Neural network training with batch loss display
 # - Final test accuracy and loss metrics
