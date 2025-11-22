@@ -93,14 +93,19 @@ class ActivityDataProcessor:
         self.activity_texts = None
 
     def load_dataset(self) -> pd.DataFrame:
-        """Load and validate dataset"""
+        """Load and validate dataset with shuffling for data augmentation"""
         logger.info(f"Loading dataset from: {self.config.dataset_path}")
 
         if not os.path.exists(self.config.dataset_path):
             raise FileNotFoundError(f"Dataset not found: {self.config.dataset_path}")
 
         self.df_activities = pd.read_csv(self.config.dataset_path)
+
+        # Shuffle the dataset rows for data augmentation
         logger.info(f"✓ Loaded {len(self.df_activities)} activities")
+        logger.info("  Shuffling dataset rows for augmentation...")
+        self.df_activities = self.df_activities.sample(frac=1, random_state=42).reset_index(drop=True)
+        logger.info("✓ Dataset shuffled")
         logger.info(f"  Columns: {list(self.df_activities.columns)}")
 
         return self.df_activities
@@ -325,12 +330,14 @@ class NeuralTrainer:
         logger.info(f"Neural trainer initialized on device: {self.device}")
 
     def prepare_data(self, embeddings: np.ndarray, df_activities: pd.DataFrame):
-        """Split data into train/validation/test sets"""
-        logger.info("\n[Neural Network] Preparing train/validation/test split...")
+        """Split data into train/validation/test sets with balanced age group distribution"""
+        logger.info("\n[Neural Network] Preparing train/validation/test split with balanced distribution...")
 
-        # Create synthetic labels based on activity categories
-        # Here we'll use age_min ranges as classes for demonstration
+        # Create labels based on age groups
+        # Toddler (0-3): 0, Preschool (4-6): 1, Elementary (7-10): 2, Teen+ (11+): 3
         labels = []
+        label_names = ['Toddler (0-3)', 'Preschool (4-6)', 'Elementary (7-10)', 'Teen+ (11+)']
+
         for idx, row in df_activities.iterrows():
             age_min = row['age_min']
             if age_min <= 3:
@@ -344,6 +351,13 @@ class NeuralTrainer:
 
         labels = np.array(labels)
 
+        # Display distribution in full dataset
+        logger.info("\n  Age Group Distribution in Full Dataset:")
+        unique, counts = np.unique(labels, return_counts=True)
+        for label, count in zip(unique, counts):
+            logger.info(f"    {label_names[label]}: {count} ({count/len(labels)*100:.1f}%)")
+
+        # Stratified split to ensure balanced distribution across all sets
         # First split: separate test set (10%)
         X_temp, X_test, y_temp, y_test = train_test_split(
             embeddings, labels, test_size=0.10, random_state=42, stratify=labels
@@ -354,19 +368,34 @@ class NeuralTrainer:
             X_temp, y_temp, test_size=0.111, random_state=42, stratify=y_temp  # 0.111 * 0.90 ≈ 0.10
         )
 
-        logger.info(f"✓ Train set: {len(X_train)} samples ({len(X_train)/len(embeddings)*100:.1f}%)")
-        logger.info(f"✓ Validation set: {len(X_val)} samples ({len(X_val)/len(embeddings)*100:.1f}%)")
-        logger.info(f"✓ Test set: {len(X_test)} samples ({len(X_test)/len(embeddings)*100:.1f}%)")
+        # Display distribution in each split
+        logger.info(f"\n✓ Train set: {len(X_train)} samples ({len(X_train)/len(embeddings)*100:.1f}%)")
+        unique, counts = np.unique(y_train, return_counts=True)
+        for label, count in zip(unique, counts):
+            logger.info(f"    {label_names[label]}: {count} ({count/len(y_train)*100:.1f}%)")
+
+        logger.info(f"\n✓ Validation set: {len(X_val)} samples ({len(X_val)/len(embeddings)*100:.1f}%)")
+        unique, counts = np.unique(y_val, return_counts=True)
+        for label, count in zip(unique, counts):
+            logger.info(f"    {label_names[label]}: {count} ({count/len(y_val)*100:.1f}%)")
+
+        logger.info(f"\n✓ Test set: {len(X_test)} samples ({len(X_test)/len(embeddings)*100:.1f}%)")
+        unique, counts = np.unique(y_test, return_counts=True)
+        for label, count in zip(unique, counts):
+            logger.info(f"    {label_names[label]}: {count} ({count/len(y_test)*100:.1f}%)")
 
         # Create datasets
         train_dataset = ActivityDataset(X_train, y_train)
         val_dataset = ActivityDataset(X_val, y_val)
         test_dataset = ActivityDataset(X_test, y_test)
 
-        # Create data loaders
+        # Create data loaders with shuffling to ensure each epoch sees varied order
+        # but maintains the same distribution due to stratified split
         self.train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
         self.val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
         self.test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
+
+        logger.info("\n✓ Balanced distribution ensured: Each epoch will see the same proportion of age groups")
 
         return len(np.unique(labels))
 
