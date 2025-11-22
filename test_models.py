@@ -236,7 +236,7 @@ class ModelTester:
         print("="*60)
 
         # Model architecture (must match training)
-        hidden_dims = [512, 512, 384, 384, 256, 256, 128, 128, 64, 64]
+        hidden_dims = [256, 128]
 
         # Check if model exists
         model_path = Path(model_path)
@@ -301,19 +301,18 @@ class ModelTester:
         results = {
             "model_info": {
                 "model_type": "Multi-layer Neural Network",
-                "architecture": "384 → 256 → 128 → 64 → 4",
+                "architecture": "384 → 256 → 128 → 4",
                 "layers": [
                     "Input: 384 (Sentence-BERT embeddings)",
-                    "Hidden 1: Linear(384, 256) + BatchNorm + ReLU + Dropout(0.3)",
-                    "Hidden 2: Linear(256, 128) + BatchNorm + ReLU + Dropout(0.3)",
-                    "Hidden 3: Linear(128, 64) + BatchNorm + ReLU + Dropout(0.3)",
-                    "Output: Linear(64, 4)"
+                    "Hidden 1: Linear(384, 256) + BatchNorm + ReLU + Dropout(0.5)",
+                    "Hidden 2: Linear(256, 128) + BatchNorm + ReLU + Dropout(0.5)",
+                    "Output: Linear(128, 4)"
                 ],
                 "total_parameters": total_params,
                 "trainable_parameters": trainable_params,
                 "optimizer": "Adam (lr=0.001)",
                 "loss_function": "CrossEntropyLoss",
-                "regularization": ["BatchNorm", "Dropout(0.3)"]
+                "regularization": ["BatchNorm", "Dropout(0.5)"]
             },
             "accuracy": float(accuracy),
             "precision": float(precision),
@@ -330,7 +329,7 @@ class ModelTester:
 
         # Print results
         print(f"\n✓ Primary Model Results:")
-        print(f"  Architecture: 384 → 256 → 128 → 64 → 4")
+        print(f"  Architecture: 384 → 256 → 128 → 4")
         print(f"  Total Parameters: {total_params:,}")
         print(f"  Accuracy:  {accuracy:.4f}")
         print(f"  Precision: {precision:.4f}")
@@ -348,7 +347,7 @@ class ModelTester:
         print(f"Using device: {device}")
 
         # Model architecture (must match training)
-        hidden_dims = [512, 512, 384, 384, 256, 256, 128, 128, 64, 64]
+        hidden_dims = [256, 128]
 
         # Create model
         model = ActivityClassifier(input_dim=384, hidden_dims=hidden_dims, num_classes=4).to(device)
