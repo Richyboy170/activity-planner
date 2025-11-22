@@ -512,7 +512,7 @@ class NeuralTrainer:
 
         return avg_test_loss, accuracy
 
-    def train(self, num_epochs: int = 10, learning_rate: float = 0.001):
+    def train(self, num_epochs: int = 50, learning_rate: float = 0.001):
         """Full training loop with train/validation/test evaluation"""
         logger.info(f"\n[Neural Network] Starting training for {num_epochs} epochs...")
         logger.info(f"  Learning rate: {learning_rate}")
@@ -640,7 +640,7 @@ class ModelTrainer:
             input_dim=self.dense_embedder.embeddings.shape[1],
             num_classes=num_classes
         )
-        test_loss, test_acc = self.neural_trainer.train(num_epochs=10, learning_rate=0.001)
+        test_loss, test_acc = self.neural_trainer.train(num_epochs=50, learning_rate=0.001)
         self.neural_trainer.save(self.config.output_dir)
 
         # Step 6: Test pipeline

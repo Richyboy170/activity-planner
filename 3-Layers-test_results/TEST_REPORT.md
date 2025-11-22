@@ -1,6 +1,6 @@
 # Model Testing Report
 
-**Test Date:** 2025-11-22T17:07:32.475710
+**Test Date:** 2025-11-21T13:02:04.702331
 
 ---
 
@@ -44,8 +44,8 @@ Random Forest was chosen as the baseline because:
 
 - **Model Type:** Multi-layer Neural Network
 - **Architecture:** 384 → 256 → 128 → 64 → 4
-- **Total Parameters:** 1,036,420
-- **Trainable Parameters:** 1,036,420
+- **Total Parameters:** 140,868
+- **Trainable Parameters:** 140,868
 
 **Layer Details:**
 
@@ -71,37 +71,37 @@ The multi-layer neural network architecture was chosen because:
 
 ### Quantitative Results
 
-- **Accuracy:** 0.7500
-- **Precision:** 0.7618
-- **Recall:** 0.7500
-- **F1 Score:** 0.7422
+- **Accuracy:** 0.9259
+- **Precision:** 0.9313
+- **Recall:** 0.9259
+- **F1 Score:** 0.9257
 
 ### Per-Class Performance
 
 | Age Group | Precision | Recall | F1 Score |
 |-----------|-----------|--------|----------|
-| Toddler (0-3) | 0.8750 | 0.5385 | 0.6667 |
-| Preschool (4-6) | 0.7143 | 0.8974 | 0.7955 |
-| Elementary (7-10) | 0.7561 | 0.7750 | 0.7654 |
-| Teen+ (11+) | 0.8000 | 0.5000 | 0.6154 |
+| Toddler (0-3) | 0.8667 | 1.0000 | 0.9286 |
+| Preschool (4-6) | 1.0000 | 0.8974 | 0.9459 |
+| Elementary (7-10) | 0.8864 | 0.9750 | 0.9286 |
+| Teen+ (11+) | 0.9286 | 0.8125 | 0.8667 |
 
 ## Model Comparison
 
-- **Accuracy Improvement:** 0.1204 (+12.04%)
-- **F1 Score Improvement:** 0.1374 (+13.74%)
+- **Accuracy Improvement:** 0.2963 (+29.63%)
+- **F1 Score Improvement:** 0.3210 (+32.10%)
 - **Better Performing Model:** Primary
 
 ## Qualitative Analysis
 
 ### Prediction Categories
 
-**Both Correct:** 61 samples
+**Both Correct:** 63 samples
 
-**Both Wrong:** 20 samples
+**Both Wrong:** 3 samples
 
-**Baseline Correct, Primary Wrong:** 7 samples
+**Baseline Correct, Primary Wrong:** 5 samples
 
-**Primary Correct, Baseline Wrong:** 20 samples
+**Primary Correct, Baseline Wrong:** 37 samples
 
 ## Visualizations
 
