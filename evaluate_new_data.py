@@ -47,26 +47,24 @@ logger = logging.getLogger(__name__)
 class NeuralClassifier(nn.Module):
     """Neural network classifier for age group classification."""
 
-    def __init__(self, input_dim=384, hidden_dims=[512, 512, 384, 384, 256, 256, 128, 128, 64, 64], num_classes=4, dropout=0.3):
+    def __init__(self, input_dim=384, hidden_dims=[256, 128], num_classes=4, dropout=0.5):
         super(NeuralClassifier, self).__init__()
 
         layers = []
         prev_dim = input_dim
 
         for hidden_dim in hidden_dims:
-            layers.extend([
-                nn.Linear(prev_dim, hidden_dim),
-                nn.BatchNorm1d(hidden_dim),
-                nn.ReLU(),
-                nn.Dropout(dropout)
-            ])
+            layers.append(nn.Linear(prev_dim, hidden_dim))
+            layers.append(nn.ReLU())
+            layers.append(nn.BatchNorm1d(hidden_dim))
+            layers.append(nn.Dropout(dropout))
             prev_dim = hidden_dim
 
         layers.append(nn.Linear(prev_dim, num_classes))
-        self.network = nn.Sequential(*layers)
+        self.model = nn.Sequential(*layers)
 
     def forward(self, x):
-        return self.network(x)
+        return self.model(x)
 
 
 class NewDataEvaluator:
@@ -132,9 +130,9 @@ class NewDataEvaluator:
         # Initialize model with same architecture as training
         model = NeuralClassifier(
             input_dim=384,
-            hidden_dims=[512, 512, 384, 384, 256, 256, 128, 128, 64, 64],
+            hidden_dims=[256, 128],
             num_classes=4,
-            dropout=0.3
+            dropout=0.5
         )
 
         # Load checkpoint
@@ -150,52 +148,7 @@ class NewDataEvaluator:
             state_dict = checkpoint
             logger.info("Loaded model from direct state dict format")
 
-        # Handle legacy checkpoint with "model." prefix instead of "network."
-        # This remaps old keys to match the current architecture
-        if any(key.startswith('model.') for key in state_dict.keys()):
-            logger.info("Remapping legacy state dict keys from 'model.' to 'network.'")
-            new_state_dict = {}
-            for key, value in state_dict.items():
-                if key.startswith('model.'):
-                    new_key = key.replace('model.', 'network.', 1)
-                    new_state_dict[new_key] = value
-                else:
-                    new_state_dict[key] = value
-            state_dict = new_state_dict
-
-        # Handle legacy layer ordering: Old model had Linear->ReLU->BatchNorm->Dropout
-        # New model has Linear->BatchNorm->ReLU->Dropout
-        # Need to remap BatchNorm layers for all 10 hidden layers
-        if 'network.2.weight' in state_dict and 'network.1.weight' not in state_dict:
-            logger.info("Detected legacy layer ordering - remapping BatchNorm layer indices")
-            # Mapping: old index -> new index for BatchNorm layers (all 10 hidden layers)
-            # Old: [2, 6, 10, 14, 18, 22, 26, 30, 34, 38] -> New: [1, 5, 9, 13, 17, 21, 25, 29, 33, 37]
-            layer_mapping = {2: 1, 6: 5, 10: 9, 14: 13, 18: 17, 22: 21, 26: 25, 30: 29, 34: 33, 38: 37}
-
-            new_state_dict = {}
-            for key, value in state_dict.items():
-                if key.startswith('network.'):
-                    # Extract layer index
-                    parts = key.split('.')
-                    if len(parts) >= 2 and parts[1].isdigit():
-                        old_idx = int(parts[1])
-
-                        # Check if this is a BatchNorm layer that needs remapping
-                        if old_idx in layer_mapping:
-                            new_idx = layer_mapping[old_idx]
-                            new_key = f"network.{new_idx}.{'.'.join(parts[2:])}"
-                            new_state_dict[new_key] = value
-                            logger.debug(f"Remapped {key} -> {new_key}")
-                        else:
-                            # Keep other layers as is
-                            new_state_dict[key] = value
-                    else:
-                        new_state_dict[key] = value
-                else:
-                    new_state_dict[key] = value
-
-            state_dict = new_state_dict
-
+        # Load state dict into model
         model.load_state_dict(state_dict)
         model.to(self.device)
         model.eval()
