@@ -1,6 +1,6 @@
 # Model Testing Report
 
-**Test Date:** 2025-11-22T17:07:32.475710
+**Test Date:** 2025-11-22T18:13:25.287657
 
 ---
 
@@ -24,42 +24,41 @@ Random Forest was chosen as the baseline because:
 
 ### Quantitative Results
 
-- **Accuracy:** 0.6296
-- **Precision:** 0.6872
-- **Recall:** 0.6296
-- **F1 Score:** 0.6047
+- **Accuracy:** 0.5463
+- **Precision:** 0.6248
+- **Recall:** 0.5463
+- **F1 Score:** 0.5192
 
 ### Per-Class Performance
 
 | Age Group | Precision | Recall | F1 Score |
 |-----------|-----------|--------|----------|
-| Toddler (0-3) | 1.0000 | 0.1538 | 0.2667 |
-| Preschool (4-6) | 0.5763 | 0.8718 | 0.6939 |
-| Elementary (7-10) | 0.6486 | 0.6000 | 0.6234 |
-| Teen+ (11+) | 0.8000 | 0.5000 | 0.6154 |
+| Toddler (0-3) | 1.0000 | 0.1429 | 0.2500 |
+| Preschool (4-6) | 0.4915 | 0.8788 | 0.6304 |
+| Elementary (7-10) | 0.5312 | 0.4595 | 0.4928 |
+| Teen+ (11+) | 0.7333 | 0.4583 | 0.5641 |
 
 ## Primary Model: Neural Network
 
 ### Architecture
 
 - **Model Type:** Multi-layer Neural Network
-- **Architecture:** 384 → 256 → 128 → 64 → 4
-- **Total Parameters:** 1,036,420
-- **Trainable Parameters:** 1,036,420
+- **Architecture:** 384 → 256 → 128 → 4
+- **Total Parameters:** 132,740
+- **Trainable Parameters:** 132,740
 
 **Layer Details:**
 
 - Input: 384 (Sentence-BERT embeddings)
-- Hidden 1: Linear(384, 256) + BatchNorm + ReLU + Dropout(0.3)
-- Hidden 2: Linear(256, 128) + BatchNorm + ReLU + Dropout(0.3)
-- Hidden 3: Linear(128, 64) + BatchNorm + ReLU + Dropout(0.3)
-- Output: Linear(64, 4)
+- Hidden 1: Linear(384, 256) + BatchNorm + ReLU + Dropout(0.5)
+- Hidden 2: Linear(256, 128) + BatchNorm + ReLU + Dropout(0.5)
+- Output: Linear(128, 4)
 
 **Training Configuration:**
 
 - **Optimizer:** Adam (lr=0.001)
 - **Loss Function:** CrossEntropyLoss
-- **Regularization:** BatchNorm, Dropout(0.3)
+- **Regularization:** BatchNorm, Dropout(0.5)
 
 ### Rationale
 
@@ -71,37 +70,37 @@ The multi-layer neural network architecture was chosen because:
 
 ### Quantitative Results
 
-- **Accuracy:** 0.7500
-- **Precision:** 0.7618
-- **Recall:** 0.7500
-- **F1 Score:** 0.7422
+- **Accuracy:** 0.3704
+- **Precision:** 0.3997
+- **Recall:** 0.3704
+- **F1 Score:** 0.3364
 
 ### Per-Class Performance
 
 | Age Group | Precision | Recall | F1 Score |
 |-----------|-----------|--------|----------|
-| Toddler (0-3) | 0.8750 | 0.5385 | 0.6667 |
-| Preschool (4-6) | 0.7143 | 0.8974 | 0.7955 |
-| Elementary (7-10) | 0.7561 | 0.7750 | 0.7654 |
-| Teen+ (11+) | 0.8000 | 0.5000 | 0.6154 |
+| Toddler (0-3) | 0.8333 | 0.3571 | 0.5000 |
+| Preschool (4-6) | 0.4286 | 0.1818 | 0.2553 |
+| Elementary (7-10) | 0.2000 | 0.1892 | 0.1944 |
+| Teen+ (11+) | 0.4151 | 0.9167 | 0.5714 |
 
 ## Model Comparison
 
-- **Accuracy Improvement:** 0.1204 (+12.04%)
-- **F1 Score Improvement:** 0.1374 (+13.74%)
-- **Better Performing Model:** Primary
+- **Accuracy Improvement:** -0.1759 (-17.59%)
+- **F1 Score Improvement:** -0.1828 (-18.28%)
+- **Better Performing Model:** Baseline
 
 ## Qualitative Analysis
 
 ### Prediction Categories
 
-**Both Correct:** 61 samples
+**Both Correct:** 18 samples
 
-**Both Wrong:** 20 samples
+**Both Wrong:** 27 samples
 
-**Baseline Correct, Primary Wrong:** 7 samples
+**Baseline Correct, Primary Wrong:** 41 samples
 
-**Primary Correct, Baseline Wrong:** 20 samples
+**Primary Correct, Baseline Wrong:** 22 samples
 
 ## Visualizations
 

@@ -43,7 +43,7 @@ class TrainingConfig:
     """Configuration for model training with adjustable parameters"""
 
     # Dataset parameters
-    dataset_path: str = 'dataset/dataset.csv'
+    dataset_path: str = 'dataset/dataset_augmented.csv'
     output_dir: str = 'models'
 
     # Model parameters
@@ -723,7 +723,7 @@ def main():
     )
 
     # Dataset arguments
-    parser.add_argument('--dataset', type=str, default='dataset/dataset.csv',
+    parser.add_argument('--dataset', type=str, default='dataset/dataset_augmented.csv',
                         help='Path to activity dataset CSV')
     parser.add_argument('--output-dir', type=str, default='models',
                         help='Output directory for trained models')
