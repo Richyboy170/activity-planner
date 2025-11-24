@@ -50,7 +50,82 @@
 
 ---
 
-## 4. Per-Class Performance on New Data
+## 3. Comparison with Baseline Performance
+
+### Baseline (Original Test Set) vs New Data
+
+| Metric | Baseline | New Data | Difference | Change % |
+|--------|----------|----------|------------|----------|
+| Accuracy | 0.3704 | 0.0833 | -0.2871 | -77.51% |
+| F1-Score | 0.3364 | 0.1369 | -0.1995 | -59.31% |
+
+### Performance Assessment
+
+**Assessment:** POOR
+
+**Rubric Score:** 2/10
+
+**Description:** Model performance is far below expectations
+
+- Meets Expectations: ✗ No
+- Within Acceptable Range: ✗ No
+
+### Analysis
+
+The neural network shows significant performance degradation on the new evaluation dataset:
+
+- **Accuracy dropped from 37.04% to 8.33%** - a decrease of 77.51%
+- **F1-Score dropped from 0.3364 to 0.1369** - a decrease of 59.31%
+- The model is classifying most samples as "Teen+ (11+)" (70/96 predictions)
+- This represents poor generalization to the new data distribution
+- The new dataset has different class distribution (no Teen+ samples, 52.1% Preschool, 43.8% Elementary)
+- The model appears to have learned biases from the training data that don't transfer well
+
+**Recommendations:**
+- Investigate data distribution differences between train and new data
+- Consider collecting more diverse training samples
+- Review feature engineering and embedding quality
+- May require model retraining with balanced dataset
+- Consider using the Random Forest baseline which showed better performance on original test set (54.63% accuracy)
+
+---
+
+## 4. Random Forest Baseline Performance
+
+### Random Forest Configuration
+
+- **n_estimators:** 100 trees
+- **max_depth:** 20
+- **Purpose:** Simple, interpretable, minimal tuning baseline
+
+### Overall Metrics (Original Test Set)
+
+- **Accuracy:** 0.5463 (54.63%)
+- **Precision:** 0.6248
+- **Recall:** 0.5463
+- **F1-Score:** 0.5192
+
+### Comparison: Neural Network vs Random Forest (Original Test Set)
+
+The Random Forest baseline outperformed the Neural Network on the original test set:
+
+| Metric | Neural Network | Random Forest | Winner |
+|--------|---------------|---------------|--------|
+| Accuracy | 0.3704 | 0.5463 | Random Forest |
+| Precision | 0.3997 | 0.6248 | Random Forest |
+| Recall | 0.3704 | 0.5463 | Random Forest |
+| F1-Score | 0.3364 | 0.5192 | Random Forest |
+
+**Key Insight:** The simpler Random Forest baseline significantly outperforms the more complex Neural Network model, suggesting that:
+- The additional complexity of the Neural Network may not be justified for this task
+- The Random Forest's ensemble approach handles this classification problem more effectively
+- For production deployment, the Random Forest baseline may be more suitable
+
+**Note:** Random Forest was not evaluated on the new evaluation dataset in this run. For a complete comparison, consider running the Random Forest model on the new data as well.
+
+---
+
+## 5. Per-Class Performance on New Data (Neural Network)
 
 | Age Group | Precision | Recall | F1-Score | Support |
 |-----------|-----------|--------|----------|---------|
@@ -61,7 +136,7 @@
 
 ---
 
-## 5. Detailed Classification Report
+## 6. Detailed Classification Report (Neural Network)
 
 ```
 Toddler (0-3):
@@ -104,7 +179,7 @@ weighted avg:
 
 ---
 
-## 6. Confusion Matrix
+## 7. Confusion Matrix (Neural Network)
 
 See `figures/confusion_matrix_new_data.png` for visualization.
 
@@ -119,12 +194,61 @@ Teen+ (11+ |     0      |     0      |     0      |     0
 
 ---
 
-## 7. Conclusions and Recommendations
+## 8. Conclusions and Recommendations
 
+### ⚠ POOR PERFORMANCE (2/10)
+
+The model shows poor performance on new data:
+
+- Performance far below expectations
+- Model does not generalize well to new data
+- Not suitable for production use in current state
+
+**Key Findings:**
+
+1. **Severe Performance Degradation:**
+   - Accuracy dropped from 37% to 8% on new data
+   - Model is heavily biased toward predicting "Teen+" class
+   - Only 8 out of 96 samples classified correctly
+
+2. **Class Distribution Mismatch:**
+   - Training/test data likely had more "Teen+" samples
+   - New evaluation data has 0% Teen+ samples
+   - Model fails to adapt to different class distributions
+
+3. **Random Forest Outperforms Neural Network:**
+   - Random Forest achieved 54.63% accuracy on original test set
+   - Neural Network only achieved 37.04% on same test set
+   - Simpler model may be more appropriate for this task
+
+**Recommendations:**
+
+1. **Immediate Actions:**
+   - Do NOT deploy current neural network model to production
+   - Consider using Random Forest baseline instead (54.63% accuracy)
+   - Collect performance metrics from Random Forest on new data
+
+2. **Model Improvement:**
+   - Complete model redesign likely required
+   - Address severe class imbalance in training data
+   - Implement proper data augmentation and balancing techniques
+   - Consider ensemble methods or different architecture
+
+3. **Data Collection:**
+   - Investigate data quality and labeling consistency
+   - Collect more diverse training samples across all age groups
+   - Ensure training data distribution matches expected deployment scenarios
+   - Balance class representation in training set
+
+4. **Alternative Approaches:**
+   - Evaluate Random Forest baseline on new data
+   - Consider simpler models (Logistic Regression, SVM)
+   - Implement proper cross-validation with stratified sampling
+   - Use calibration techniques to improve probability estimates
 
 ---
 
-## 8. Visualizations
+## 9. Visualizations
 
 The following visualizations have been generated:
 
@@ -135,7 +259,7 @@ The following visualizations have been generated:
 
 ---
 
-## 9. Evaluation Metadata
+## 10. Evaluation Metadata
 
 ```json
 {
