@@ -304,6 +304,93 @@ activity-planner/
 - **SQLite**: Database storage
 - **NumPy/Pandas**: Data processing
 
+## Model Evaluation & Baseline Comparison
+
+### Evaluating on New Data
+
+The project includes a comprehensive evaluation script (`evaluate_new_data.py`) that tests both the **Neural Network classifier** and a **Random Forest baseline** on completely new, unseen data.
+
+#### Random Forest Baseline
+
+**Configuration:**
+- **100 trees** (n_estimators=100)
+- **Max depth: 20**
+- **Purpose:** Simple, interpretable, minimal tuning baseline for comparison
+
+The Random Forest baseline provides:
+- Fast training and inference
+- Interpretable feature importance
+- Strong performance on tabular data
+- Minimal hyperparameter tuning required
+
+#### Running Evaluation
+
+```bash
+python evaluate_new_data.py \
+  --new-data path/to/new_data.csv \
+  --data-source "Description of data source" \
+  --model-dir models \
+  --output-dir new_data_evaluation
+```
+
+#### What Gets Evaluated
+
+1. **Neural Network Performance**
+   - Accuracy, Precision, Recall, F1-Score
+   - Per-class metrics
+   - Confusion matrix
+   - Prediction confidence statistics
+
+2. **Random Forest Baseline Performance**
+   - Same metrics as Neural Network
+   - Direct comparison with Neural Network
+
+3. **Comparison Analysis**
+   - Neural Network vs Random Forest
+   - New data vs Original test set baseline
+   - Performance assessment with rubric scoring
+
+#### Evaluation Outputs
+
+After running evaluation, you'll find in `new_data_evaluation/`:
+
+**Reports:**
+- `NEW_DATA_EVALUATION_REPORT.md` - Comprehensive markdown report with:
+  - Overall performance metrics (both models)
+  - Model comparison (Neural Network vs Random Forest)
+  - Baseline comparison (new data vs original test set)
+  - Per-class performance breakdown
+  - Performance assessment and recommendations
+  - Rubric scoring (0-10)
+
+**Visualizations** in `figures/`:
+- `confusion_matrix_neural_network.png`
+- `confusion_matrix_random_forest.png`
+- `per_class_performance_neural_network.png`
+- `per_class_performance_random_forest.png`
+- `confidence_analysis_neural_network.png`
+- `confidence_analysis_random_forest.png`
+- `baseline_vs_new_comparison.png`
+- `neural_network_vs_random_forest.png`
+
+**JSON Results:**
+- `new_data_evaluation_results.json` - Raw metrics for both models
+
+#### Interpretation
+
+The evaluation provides a **rubric score (0-10)** based on performance:
+
+- **10/10**: Performance meets/exceeds expectations
+- **7/10**: Reasonable but below expectations
+- **4/10**: Inconsistent performance
+- **2/10**: Poor performance
+- **0/10**: Failed evaluation
+
+The comparison between Neural Network and Random Forest helps determine:
+- Whether the additional complexity of the Neural Network is justified
+- If a simpler baseline model (Random Forest) is sufficient
+- Which model generalizes better to new data
+
 ## Future Enhancements
 
 - [ ] Add calendar integration
