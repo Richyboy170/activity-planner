@@ -45,7 +45,11 @@ logger = logging.getLogger(__name__)
 
 
 class NeuralClassifier(nn.Module):
-    """Neural network classifier for age group classification."""
+    """Neural network classifier for age group classification.
+
+    This architecture matches the ActivityClassifier used during training,
+    with input dropout and progressive dropout in deeper layers.
+    """
 
     def __init__(self, input_dim=384, hidden_dims=[256, 128], num_classes=4, dropout=0.5):
         super(NeuralClassifier, self).__init__()
@@ -53,13 +57,20 @@ class NeuralClassifier(nn.Module):
         layers = []
         prev_dim = input_dim
 
-        for hidden_dim in hidden_dims:
+        # Input dropout for robustness (matches training architecture)
+        layers.append(nn.Dropout(dropout * 0.6))  # Lighter dropout at input
+
+        # Build hidden layers with progressive dropout
+        for i, hidden_dim in enumerate(hidden_dims):
             layers.append(nn.Linear(prev_dim, hidden_dim))
             layers.append(nn.ReLU())
             layers.append(nn.BatchNorm1d(hidden_dim))
-            layers.append(nn.Dropout(dropout))
+            # Increase dropout progressively in deeper layers
+            layer_dropout = dropout + (i * 0.05)
+            layers.append(nn.Dropout(min(layer_dropout, 0.7)))  # Cap at 0.7
             prev_dim = hidden_dim
 
+        # Output layer
         layers.append(nn.Linear(prev_dim, num_classes))
         self.model = nn.Sequential(*layers)
 
