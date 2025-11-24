@@ -23,7 +23,7 @@ from rank_bm25 import BM25Okapi
 from sentence_transformers import SentenceTransformer
 import faiss
 from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, KFold
 from tqdm import tqdm
 import torch
 import torch.nn as nn
@@ -290,20 +290,25 @@ class ActivityDataset(Dataset):
 
 
 class ActivityClassifier(nn.Module):
-    """Neural network for activity classification/ranking"""
+    """Neural network for activity classification/ranking with heavy regularization"""
 
-    def __init__(self, input_dim: int, hidden_dims: List[int], num_classes: int, dropout: float = 0.3):
+    def __init__(self, input_dim: int, hidden_dims: List[int], num_classes: int, dropout: float = 0.5):
         super(ActivityClassifier, self).__init__()
 
         layers = []
         prev_dim = input_dim
 
-        # Build hidden layers
-        for hidden_dim in hidden_dims:
+        # Input dropout for robustness
+        layers.append(nn.Dropout(dropout * 0.6))  # Lighter dropout at input
+
+        # Build hidden layers with aggressive dropout
+        for i, hidden_dim in enumerate(hidden_dims):
             layers.append(nn.Linear(prev_dim, hidden_dim))
             layers.append(nn.ReLU())
             layers.append(nn.BatchNorm1d(hidden_dim))
-            layers.append(nn.Dropout(dropout))
+            # Increase dropout progressively in deeper layers
+            layer_dropout = dropout + (i * 0.05)
+            layers.append(nn.Dropout(min(layer_dropout, 0.7)))  # Cap at 0.7
             prev_dim = hidden_dim
 
         # Output layer
@@ -408,15 +413,16 @@ class NeuralTrainer:
         return len(np.unique(labels))
 
     def build_model(self, input_dim: int, num_classes: int):
-        """Build neural network model"""
+        """Build neural network model with heavy regularization"""
         logger.info(f"\n[Neural Network] Building model...")
         logger.info(f"  Input dimension: {input_dim}")
         logger.info(f"  Number of classes: {num_classes}")
 
-        # Simplified architecture to reduce overfitting (was 10 layers with 140K params)
-        # Now using 2 hidden layers with stronger regularization
+        # Simplified architecture to reduce overfitting
+        # Using 2 hidden layers with aggressive dropout and L2 regularization
         hidden_dims = [256, 128]
-        self.model = ActivityClassifier(input_dim, hidden_dims, num_classes, dropout=0.5)
+        dropout_rate = 0.5
+        self.model = ActivityClassifier(input_dim, hidden_dims, num_classes, dropout=dropout_rate)
         self.model.to(self.device)
 
         # Count parameters
@@ -425,7 +431,8 @@ class NeuralTrainer:
 
         logger.info(f"✓ Model built with {trainable_params:,} trainable parameters")
         logger.info(f"  Architecture: {input_dim} -> {' -> '.join(map(str, hidden_dims))} -> {num_classes}")
-        logger.info(f"  Dropout: 0.5 (increased from 0.3 for better generalization)")
+        logger.info(f"  Dropout: Base {dropout_rate} (progressive: 0.3 input -> 0.5 -> 0.55 -> output)")
+        logger.info(f"  Regularization: L2 weight decay, class weighting, early stopping")
 
     def train_epoch(self, optimizer, criterion, epoch: int, num_epochs: int):
         """Train for one epoch with batch-wise loss display"""
@@ -512,10 +519,12 @@ class NeuralTrainer:
 
         return avg_test_loss, accuracy
 
-    def train(self, num_epochs: int = 50, learning_rate: float = 0.001):
-        """Full training loop with train/validation/test evaluation"""
+    def train(self, num_epochs: int = 50, learning_rate: float = 0.001, patience: int = 10):
+        """Full training loop with train/validation/test evaluation and early stopping"""
         logger.info(f"\n[Neural Network] Starting training for {num_epochs} epochs...")
         logger.info(f"  Learning rate: {learning_rate}")
+        logger.info(f"  L2 Regularization (weight_decay): 1e-4 (increased from 1e-5)")
+        logger.info(f"  Early stopping patience: {patience} epochs")
         logger.info(f"  Device: {self.device}")
         logger.info("="*70)
 
@@ -531,9 +540,12 @@ class NeuralTrainer:
             logger.info(f"    {label_names[i]}: {weight:.4f}")
 
         criterion = nn.CrossEntropyLoss(weight=class_weights)
-        optimizer = optim.Adam(self.model.parameters(), lr=learning_rate, weight_decay=1e-5)
+        # Increased weight_decay from 1e-5 to 1e-4 for stronger L2 regularization
+        optimizer = optim.Adam(self.model.parameters(), lr=learning_rate, weight_decay=1e-4)
 
         best_val_loss = float('inf')
+        best_model_state = None
+        epochs_without_improvement = 0
 
         for epoch in range(num_epochs):
             # Train
@@ -547,11 +559,28 @@ class NeuralTrainer:
             logger.info(f"  Train Loss: {train_loss:.4f}")
             logger.info(f"  Val Loss: {val_loss:.4f}")
             logger.info(f"  Val Accuracy: {val_acc:.2f}%")
+            logger.info(f"  Gap (Train-Val Loss): {abs(train_loss - val_loss):.4f}")
 
-            # Save best model
+            # Early stopping and model checkpointing
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
-                logger.info(f"  ✓ New best validation loss! Saving model...")
+                best_model_state = self.model.state_dict().copy()
+                epochs_without_improvement = 0
+                logger.info(f"  ✓ New best validation loss! Model checkpoint saved.")
+            else:
+                epochs_without_improvement += 1
+                logger.info(f"  No improvement for {epochs_without_improvement} epoch(s)")
+
+            # Early stopping check
+            if epochs_without_improvement >= patience:
+                logger.info(f"\n⚠ Early stopping triggered after {epoch+1} epochs (patience={patience})")
+                logger.info(f"  Best validation loss: {best_val_loss:.4f}")
+                break
+
+        # Restore best model
+        if best_model_state is not None:
+            self.model.load_state_dict(best_model_state)
+            logger.info("\n✓ Restored best model from checkpoint")
 
         logger.info("\n" + "="*70)
         logger.info("[Neural Network] Training complete!")
@@ -564,6 +593,136 @@ class NeuralTrainer:
         logger.info(f"✓ Test Accuracy: {test_acc:.2f}%")
 
         return test_loss, test_acc
+
+    def cross_validate(self, embeddings: np.ndarray, labels: np.ndarray, k_folds: int = 5,
+                      num_epochs: int = 50, learning_rate: float = 0.001):
+        """Perform K-fold cross-validation to evaluate model generalization"""
+        logger.info(f"\n[K-Fold Cross-Validation] Starting {k_folds}-fold cross-validation...")
+        logger.info(f"  Dataset size: {len(embeddings)}")
+        logger.info(f"  Number of folds: {k_folds}")
+        logger.info("="*70)
+
+        kfold = KFold(n_splits=k_folds, shuffle=True, random_state=42)
+        fold_results = []
+
+        label_names = ['Toddler (0-3)', 'Preschool (4-6)', 'Elementary (7-10)', 'Teen+ (11+)']
+
+        for fold_idx, (train_idx, val_idx) in enumerate(kfold.split(embeddings)):
+            logger.info(f"\n{'='*70}")
+            logger.info(f"Fold {fold_idx + 1}/{k_folds}")
+            logger.info(f"{'='*70}")
+
+            # Split data
+            X_train_fold = embeddings[train_idx]
+            y_train_fold = labels[train_idx]
+            X_val_fold = embeddings[val_idx]
+            y_val_fold = labels[val_idx]
+
+            logger.info(f"  Train size: {len(X_train_fold)} | Validation size: {len(X_val_fold)}")
+
+            # Create datasets
+            train_dataset = ActivityDataset(X_train_fold, y_train_fold)
+            val_dataset = ActivityDataset(X_val_fold, y_val_fold)
+
+            train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+            val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
+
+            # Rebuild model for this fold
+            num_classes = len(np.unique(labels))
+            input_dim = embeddings.shape[1]
+            hidden_dims = [256, 128]
+
+            model = ActivityClassifier(input_dim, hidden_dims, num_classes, dropout=0.5)
+            model.to(self.device)
+
+            # Calculate class weights for this fold
+            unique, counts = np.unique(y_train_fold, return_counts=True)
+            class_weights = 1.0 / torch.tensor(counts, dtype=torch.float32)
+            class_weights = class_weights / class_weights.sum() * num_classes
+            class_weights = class_weights.to(self.device)
+
+            criterion = nn.CrossEntropyLoss(weight=class_weights)
+            optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)
+
+            # Train this fold with early stopping
+            best_val_loss = float('inf')
+            patience = 10
+            epochs_without_improvement = 0
+
+            for epoch in range(num_epochs):
+                # Train
+                model.train()
+                train_loss = 0.0
+                for inputs, targets in train_loader:
+                    inputs, targets = inputs.to(self.device), targets.to(self.device)
+                    optimizer.zero_grad()
+                    outputs = model(inputs)
+                    loss = criterion(outputs, targets)
+                    loss.backward()
+                    optimizer.step()
+                    train_loss += loss.item()
+
+                avg_train_loss = train_loss / len(train_loader)
+
+                # Validate
+                model.eval()
+                val_loss = 0.0
+                correct = 0
+                total = 0
+
+                with torch.no_grad():
+                    for inputs, targets in val_loader:
+                        inputs, targets = inputs.to(self.device), targets.to(self.device)
+                        outputs = model(inputs)
+                        loss = criterion(outputs, targets)
+                        val_loss += loss.item()
+
+                        _, predicted = torch.max(outputs.data, 1)
+                        total += targets.size(0)
+                        correct += (predicted == targets).sum().item()
+
+                avg_val_loss = val_loss / len(val_loader)
+                val_acc = 100 * correct / total
+
+                # Early stopping
+                if avg_val_loss < best_val_loss:
+                    best_val_loss = avg_val_loss
+                    best_val_acc = val_acc
+                    epochs_without_improvement = 0
+                else:
+                    epochs_without_improvement += 1
+
+                if epochs_without_improvement >= patience:
+                    logger.info(f"  Early stopping at epoch {epoch+1}")
+                    break
+
+            logger.info(f"\n  Fold {fold_idx + 1} Results:")
+            logger.info(f"    Best Val Loss: {best_val_loss:.4f}")
+            logger.info(f"    Best Val Accuracy: {best_val_acc:.2f}%")
+
+            fold_results.append({
+                'fold': fold_idx + 1,
+                'val_loss': best_val_loss,
+                'val_accuracy': best_val_acc
+            })
+
+        # Summary statistics
+        logger.info("\n" + "="*70)
+        logger.info("[Cross-Validation Summary]")
+        logger.info("="*70)
+
+        avg_val_loss = np.mean([r['val_loss'] for r in fold_results])
+        std_val_loss = np.std([r['val_loss'] for r in fold_results])
+        avg_val_acc = np.mean([r['val_accuracy'] for r in fold_results])
+        std_val_acc = np.std([r['val_accuracy'] for r in fold_results])
+
+        logger.info(f"  Average Validation Loss: {avg_val_loss:.4f} ± {std_val_loss:.4f}")
+        logger.info(f"  Average Validation Accuracy: {avg_val_acc:.2f}% ± {std_val_acc:.2f}%")
+        logger.info("\n  Per-Fold Results:")
+        for result in fold_results:
+            logger.info(f"    Fold {result['fold']}: Loss={result['val_loss']:.4f}, Acc={result['val_accuracy']:.2f}%")
+
+        return fold_results, avg_val_loss, avg_val_acc
 
     def save(self, output_dir: str):
         """Save trained model and training history"""
@@ -633,18 +792,48 @@ class ModelTrainer:
         self._save_dataset()
         self.config.save(os.path.join(self.config.output_dir, 'training_config.json'))
 
-        # Step 5: Train neural network
-        logger.info("\n[6/7] Training neural network classifier...")
+        # Step 5: Perform K-fold cross-validation for model evaluation
+        logger.info("\n[6/8] Running K-fold cross-validation...")
+
+        # Create labels for cross-validation
+        labels = []
+        for idx, row in self.df_activities.iterrows():
+            age_min = row['age_min']
+            age_max = row['age_max']
+            age_mid = (age_min + age_max) / 2
+
+            if age_mid <= 3.5:
+                labels.append(0)  # Toddler
+            elif age_mid <= 7:
+                labels.append(1)  # Preschool
+            elif age_mid <= 11:
+                labels.append(2)  # Elementary
+            else:
+                labels.append(3)  # Teen+
+
+        labels = np.array(labels)
+
+        # Run cross-validation
+        cv_results, avg_cv_loss, avg_cv_acc = self.neural_trainer.cross_validate(
+            self.dense_embedder.embeddings,
+            labels,
+            k_folds=5,
+            num_epochs=50,
+            learning_rate=0.001
+        )
+
+        # Step 6: Train final neural network on full train/val/test split
+        logger.info("\n[7/8] Training final neural network classifier...")
         num_classes = self.neural_trainer.prepare_data(self.dense_embedder.embeddings, self.df_activities)
         self.neural_trainer.build_model(
             input_dim=self.dense_embedder.embeddings.shape[1],
             num_classes=num_classes
         )
-        test_loss, test_acc = self.neural_trainer.train(num_epochs=50, learning_rate=0.001)
+        test_loss, test_acc = self.neural_trainer.train(num_epochs=50, learning_rate=0.001, patience=10)
         self.neural_trainer.save(self.config.output_dir)
 
-        # Step 6: Test pipeline
-        logger.info("\n[7/7] Testing hybrid retrieval pipeline...")
+        # Step 7: Test pipeline
+        logger.info("\n[8/8] Testing hybrid retrieval pipeline...")
         self._test_pipeline()
 
         logger.info("\n" + "="*70)
@@ -660,9 +849,12 @@ class ModelTrainer:
         logger.info("  ✓ training_history.json - Training loss history")
         logger.info("  ✓ activities_processed.csv - Processed dataset")
         logger.info("  ✓ training_config.json - Training parameters")
-        logger.info(f"\nNeural Network Performance:")
-        logger.info(f"  Final Test Loss: {test_loss:.4f}")
-        logger.info(f"  Final Test Accuracy: {test_acc:.2f}%")
+        logger.info(f"\nCross-Validation Results ({len(cv_results)}-Fold):")
+        logger.info(f"  Average CV Loss: {avg_cv_loss:.4f}")
+        logger.info(f"  Average CV Accuracy: {avg_cv_acc:.2f}%")
+        logger.info(f"\nFinal Test Set Performance:")
+        logger.info(f"  Test Loss: {test_loss:.4f}")
+        logger.info(f"  Test Accuracy: {test_acc:.2f}%")
         logger.info("\nNext steps:")
         logger.info("  1. Run: python app_optimized.py")
         logger.info("  2. Open: http://localhost:5000")
