@@ -338,25 +338,28 @@ class NeuralTrainer:
         """Split data into train/validation/test sets with balanced age group distribution"""
         logger.info("\n[Neural Network] Preparing train/validation/test split with balanced distribution...")
 
-        # Create labels based on age groups using age midpoint for better accuracy
-        # Toddler (0-3): 0, Preschool (4-6): 1, Elementary (7-10): 2, Teen+ (11+): 3
+        # Create labels based on age groups
+        # Use min age for classification (consistent with test_models.py)
         labels = []
-        label_names = ['Toddler (0-3)', 'Preschool (4-6)', 'Elementary (7-10)', 'Teen+ (11+)']
+        label_names = ['Toddler (0-3)', 'Preschool (4-6)', 'Elementary (7-10)', 'Teen (11-17)', 'Young Adult (18-39)', 'Adult (40-64)', 'Senior (65+)']
 
         for idx, row in df_activities.iterrows():
-            # Use midpoint of age range for more accurate classification
             age_min = row['age_min']
-            age_max = row['age_max']
-            age_mid = (age_min + age_max) / 2
 
-            if age_mid <= 3.5:
+            if age_min <= 3:
                 labels.append(0)  # Toddler
-            elif age_mid <= 7:
+            elif age_min <= 6:
                 labels.append(1)  # Preschool
-            elif age_mid <= 11:
+            elif age_min <= 10:
                 labels.append(2)  # Elementary
+            elif age_min <= 17:
+                labels.append(3)  # Teen
+            elif age_min <= 39:
+                labels.append(4)  # Young Adult
+            elif age_min <= 64:
+                labels.append(5)  # Adult
             else:
-                labels.append(3)  # Teen+
+                labels.append(6)  # Senior
 
         labels = np.array(labels)
 
@@ -535,7 +538,7 @@ class NeuralTrainer:
         class_weights = class_weights.to(self.device)
 
         logger.info(f"\n  Class Weights (to address imbalance):")
-        label_names = ['Toddler (0-3)', 'Preschool (4-6)', 'Elementary (7-10)', 'Teen+ (11+)']
+        label_names = ['Toddler (0-3)', 'Preschool (4-6)', 'Elementary (7-10)', 'Teen (11-17)', 'Young Adult (18-39)', 'Adult (40-64)', 'Senior (65+)']
         for i, weight in enumerate(class_weights):
             logger.info(f"    {label_names[i]}: {weight:.4f}")
 
@@ -605,7 +608,7 @@ class NeuralTrainer:
         kfold = KFold(n_splits=k_folds, shuffle=True, random_state=42)
         fold_results = []
 
-        label_names = ['Toddler (0-3)', 'Preschool (4-6)', 'Elementary (7-10)', 'Teen+ (11+)']
+        label_names = ['Toddler (0-3)', 'Preschool (4-6)', 'Elementary (7-10)', 'Teen (11-17)', 'Young Adult (18-39)', 'Adult (40-64)', 'Senior (65+)']
 
         for fold_idx, (train_idx, val_idx) in enumerate(kfold.split(embeddings)):
             logger.info(f"\n{'='*70}")
@@ -799,17 +802,21 @@ class ModelTrainer:
         labels = []
         for idx, row in self.df_activities.iterrows():
             age_min = row['age_min']
-            age_max = row['age_max']
-            age_mid = (age_min + age_max) / 2
 
-            if age_mid <= 3.5:
+            if age_min <= 3:
                 labels.append(0)  # Toddler
-            elif age_mid <= 7:
+            elif age_min <= 6:
                 labels.append(1)  # Preschool
-            elif age_mid <= 11:
+            elif age_min <= 10:
                 labels.append(2)  # Elementary
+            elif age_min <= 17:
+                labels.append(3)  # Teen
+            elif age_min <= 39:
+                labels.append(4)  # Young Adult
+            elif age_min <= 64:
+                labels.append(5)  # Adult
             else:
-                labels.append(3)  # Teen+
+                labels.append(6)  # Senior
 
         labels = np.array(labels)
 
