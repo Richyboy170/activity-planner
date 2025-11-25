@@ -1,5 +1,5 @@
 {
-  "dataset_path": "dataset/dataset_augmented.csv",
+  "dataset_path": "dataset/dataset.csv",
   "output_dir": "models",
   "sentence_bert_model": "all-MiniLM-L6-v2",
   "bm25_k1": 1.5,
