@@ -234,7 +234,8 @@ class NewDataEvaluator:
         if test_report_path.exists():
             with open(test_report_path, 'r') as f:
                 report = json.load(f)
-                return report.get('neural_network', {})
+                # Try 'primary_model' first (current format), then 'neural_network' (legacy format)
+                return report.get('primary_model', report.get('neural_network', {}))
         return {}
 
     def load_new_data(self, csv_path: str, data_source_description: str) -> Tuple[List[str], np.ndarray]:
