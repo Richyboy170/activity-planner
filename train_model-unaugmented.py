@@ -365,9 +365,14 @@ class NeuralTrainer:
 
         # Display distribution in full dataset
         logger.info("\n  Age Group Distribution in Full Dataset:")
-        unique, counts = np.unique(labels, return_counts=True)
-        for label, count in zip(unique, counts):
+        unique_full, counts_full = np.unique(labels, return_counts=True)
+        for label, count in zip(unique_full, counts_full):
             logger.info(f"    {label_names[label]}: {count} ({count/len(labels)*100:.1f}%)")
+
+        # Store class counts from full dataset for weighted loss calculation
+        # This ensures all classes are represented even if some splits don't have all classes
+        self.class_counts = counts_full.copy()
+        self.num_classes = len(unique_full)
 
         # Stratified split to ensure balanced distribution across all sets
         # First split: separate test set (10%)
@@ -382,18 +387,18 @@ class NeuralTrainer:
 
         # Display distribution in each split
         logger.info(f"\n✓ Train set: {len(X_train)} samples ({len(X_train)/len(embeddings)*100:.1f}%)")
-        unique, counts = np.unique(y_train, return_counts=True)
-        for label, count in zip(unique, counts):
+        unique_train, counts_train = np.unique(y_train, return_counts=True)
+        for label, count in zip(unique_train, counts_train):
             logger.info(f"    {label_names[label]}: {count} ({count/len(y_train)*100:.1f}%)")
 
         logger.info(f"\n✓ Validation set: {len(X_val)} samples ({len(X_val)/len(embeddings)*100:.1f}%)")
-        unique, counts = np.unique(y_val, return_counts=True)
-        for label, count in zip(unique, counts):
+        unique_val, counts_val = np.unique(y_val, return_counts=True)
+        for label, count in zip(unique_val, counts_val):
             logger.info(f"    {label_names[label]}: {count} ({count/len(y_val)*100:.1f}%)")
 
         logger.info(f"\n✓ Test set: {len(X_test)} samples ({len(X_test)/len(embeddings)*100:.1f}%)")
-        unique, counts = np.unique(y_test, return_counts=True)
-        for label, count in zip(unique, counts):
+        unique_test, counts_test = np.unique(y_test, return_counts=True)
+        for label, count in zip(unique_test, counts_test):
             logger.info(f"    {label_names[label]}: {count} ({count/len(y_test)*100:.1f}%)")
 
         # Create datasets
@@ -409,11 +414,7 @@ class NeuralTrainer:
 
         logger.info("\n✓ Balanced distribution ensured: Each epoch will see the same proportion of age groups")
 
-        # Store class counts for weighted loss calculation
-        self.class_counts = counts.copy()
-        self.num_classes = len(np.unique(labels))
-
-        return len(np.unique(labels))
+        return self.num_classes
 
     def build_model(self, input_dim: int, num_classes: int):
         """Build neural network model with heavy regularization"""
