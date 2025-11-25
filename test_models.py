@@ -11,7 +11,10 @@ Both models classify activities into age groups:
 - Toddler (0-3 years)
 - Preschool (4-6 years)
 - Elementary (7-10 years)
-- Teen+ (11+ years)
+- Teen (11-17 years)
+- Young Adult (18-39 years)
+- Adult (40-64 years)
+- Senior (65+ years)
 """
 
 import torch
@@ -105,7 +108,7 @@ class ModelTester:
         self.output_dir.mkdir(exist_ok=True)
 
         # Class labels
-        self.age_groups = ['Toddler (0-3)', 'Preschool (4-6)', 'Elementary (7-10)', 'Teen+ (11+)']
+        self.age_groups = ['Toddler (0-3)', 'Preschool (4-6)', 'Elementary (7-10)', 'Teen (11-17)', 'Young Adult (18-39)', 'Adult (40-64)', 'Senior (65+)']
 
         # Results storage
         self.baseline_results = {}
@@ -137,8 +140,14 @@ class ModelTester:
                 return 1  # Preschool
             elif min_age <= 10:
                 return 2  # Elementary
+            elif min_age <= 17:
+                return 3  # Teen
+            elif min_age <= 39:
+                return 4  # Young Adult
+            elif min_age <= 64:
+                return 5  # Adult
             else:
-                return 3  # Teen+
+                return 6  # Senior
 
         labels = df['age_min'].apply(get_age_group).values
 
@@ -246,7 +255,7 @@ class ModelTester:
             model, history = self._train_neural_network(X_train, y_train, X_val, y_val)
         else:
             print(f"✓ Loading model from {model_path}")
-            model = ActivityClassifier(input_dim=384, hidden_dims=hidden_dims, num_classes=4)
+            model = ActivityClassifier(input_dim=384, hidden_dims=hidden_dims, num_classes=7)
 
             # Load checkpoint
             checkpoint = torch.load(model_path, map_location='cpu')
@@ -301,12 +310,12 @@ class ModelTester:
         results = {
             "model_info": {
                 "model_type": "Multi-layer Neural Network",
-                "architecture": "384 → 256 → 128 → 4",
+                "architecture": "384 → 256 → 128 → 7",
                 "layers": [
                     "Input: 384 (Sentence-BERT embeddings)",
                     "Hidden 1: Linear(384, 256) + BatchNorm + ReLU + Dropout(0.5)",
                     "Hidden 2: Linear(256, 128) + BatchNorm + ReLU + Dropout(0.5)",
-                    "Output: Linear(128, 4)"
+                    "Output: Linear(128, 7)"
                 ],
                 "total_parameters": total_params,
                 "trainable_parameters": trainable_params,
@@ -329,7 +338,7 @@ class ModelTester:
 
         # Print results
         print(f"\n✓ Primary Model Results:")
-        print(f"  Architecture: 384 → 256 → 128 → 4")
+        print(f"  Architecture: 384 → 256 → 128 → 7")
         print(f"  Total Parameters: {total_params:,}")
         print(f"  Accuracy:  {accuracy:.4f}")
         print(f"  Precision: {precision:.4f}")
@@ -350,7 +359,7 @@ class ModelTester:
         hidden_dims = [256, 128]
 
         # Create model
-        model = ActivityClassifier(input_dim=384, hidden_dims=hidden_dims, num_classes=4).to(device)
+        model = ActivityClassifier(input_dim=384, hidden_dims=hidden_dims, num_classes=7).to(device)
         criterion = nn.CrossEntropyLoss()
         optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
@@ -813,7 +822,7 @@ class ModelTester:
             f.write("### Rationale\n\n")
             f.write("The multi-layer neural network architecture was chosen because:\n")
             f.write("- Can learn complex non-linear patterns in the embedding space\n")
-            f.write("- Progressive dimensionality reduction (384→256→128→64) allows hierarchical feature learning\n")
+            f.write("- Progressive dimensionality reduction (384→256→128→7) allows hierarchical feature learning\n")
             f.write("- BatchNorm and Dropout provide regularization to prevent overfitting\n")
             f.write("- Well-suited for high-dimensional embedding inputs\n\n")
 
