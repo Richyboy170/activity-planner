@@ -255,17 +255,40 @@ class ModelTester:
             model, history = self._train_neural_network(X_train, y_train, X_val, y_val)
         else:
             print(f"✓ Loading model from {model_path}")
-            model = ActivityClassifier(input_dim=384, hidden_dims=hidden_dims, num_classes=7)
 
-            # Load checkpoint
+            # Load checkpoint first to inspect architecture
             checkpoint = torch.load(model_path, map_location='cpu')
 
-            # Handle both save formats
+            # Extract state_dict
             if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
-                model.load_state_dict(checkpoint['model_state_dict'])
+                state_dict = checkpoint['model_state_dict']
             else:
-                model.load_state_dict(checkpoint)
+                state_dict = checkpoint
 
+            # Detect number of classes from the output layer
+            # The output layer is the last linear layer (model.9.weight for hidden_dims=[256,128])
+            output_layer_key = None
+            for key in state_dict.keys():
+                if 'weight' in key and len(state_dict[key].shape) == 2:
+                    output_layer_key = key
+
+            if output_layer_key:
+                num_classes_in_checkpoint = state_dict[output_layer_key].shape[0]
+                expected_num_classes = 7
+
+                if num_classes_in_checkpoint != expected_num_classes:
+                    print(f"⚠ WARNING: Checkpoint has {num_classes_in_checkpoint} output classes, but current code expects {expected_num_classes}")
+                    print(f"⚠ Using checkpoint architecture ({num_classes_in_checkpoint} classes). Please retrain the model for {expected_num_classes} classes.")
+
+                # Create model with the architecture from the checkpoint
+                model = ActivityClassifier(input_dim=384, hidden_dims=hidden_dims, num_classes=num_classes_in_checkpoint)
+            else:
+                # Fallback: use expected architecture
+                print("⚠ Could not detect architecture from checkpoint, using default (7 classes)")
+                model = ActivityClassifier(input_dim=384, hidden_dims=hidden_dims, num_classes=7)
+
+            # Load the state dict
+            model.load_state_dict(state_dict)
             model.eval()
 
             # Try to load history
@@ -307,15 +330,19 @@ class ModelTester:
         total_params = sum(p.numel() for p in model.parameters())
         trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
+        # Get the actual number of output classes from the model
+        num_output_classes = list(model.parameters())[-1].shape[0]
+        architecture_str = f"384 → 256 → 128 → {num_output_classes}"
+
         results = {
             "model_info": {
                 "model_type": "Multi-layer Neural Network",
-                "architecture": "384 → 256 → 128 → 7",
+                "architecture": architecture_str,
                 "layers": [
                     "Input: 384 (Sentence-BERT embeddings)",
                     "Hidden 1: Linear(384, 256) + BatchNorm + ReLU + Dropout(0.5)",
                     "Hidden 2: Linear(256, 128) + BatchNorm + ReLU + Dropout(0.5)",
-                    "Output: Linear(128, 7)"
+                    f"Output: Linear(128, {num_output_classes})"
                 ],
                 "total_parameters": total_params,
                 "trainable_parameters": trainable_params,
@@ -338,7 +365,7 @@ class ModelTester:
 
         # Print results
         print(f"\n✓ Primary Model Results:")
-        print(f"  Architecture: 384 → 256 → 128 → 7")
+        print(f"  Architecture: {architecture_str}")
         print(f"  Total Parameters: {total_params:,}")
         print(f"  Accuracy:  {accuracy:.4f}")
         print(f"  Precision: {precision:.4f}")
