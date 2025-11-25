@@ -147,15 +147,7 @@ class NewDataEvaluator:
         if not model_path.exists():
             raise FileNotFoundError(f"Model not found at {model_path}")
 
-        # Initialize model with same architecture as training
-        model = NeuralClassifier(
-            input_dim=384,
-            hidden_dims=[256, 128],
-            num_classes=7,
-            dropout=0.5
-        )
-
-        # Load checkpoint
+        # Load checkpoint first to inspect architecture
         checkpoint = torch.load(model_path, map_location=self.device)
 
         # Handle both checkpoint formats
@@ -167,6 +159,37 @@ class NewDataEvaluator:
             # Direct state dict format
             state_dict = checkpoint
             logger.info("Loaded model from direct state dict format")
+
+        # Detect number of classes from the output layer
+        output_layer_key = None
+        for key in state_dict.keys():
+            if 'weight' in key and len(state_dict[key].shape) == 2:
+                output_layer_key = key
+
+        if output_layer_key:
+            num_classes_in_checkpoint = state_dict[output_layer_key].shape[0]
+            expected_num_classes = 7
+
+            if num_classes_in_checkpoint != expected_num_classes:
+                logger.warning(f"Checkpoint has {num_classes_in_checkpoint} output classes, but current code expects {expected_num_classes}")
+                logger.warning(f"Using checkpoint architecture ({num_classes_in_checkpoint} classes). Please retrain the model for {expected_num_classes} classes.")
+
+            # Initialize model with same architecture as the checkpoint
+            model = NeuralClassifier(
+                input_dim=384,
+                hidden_dims=[256, 128],
+                num_classes=num_classes_in_checkpoint,
+                dropout=0.5
+            )
+        else:
+            # Fallback: use expected architecture
+            logger.warning("Could not detect architecture from checkpoint, using default (7 classes)")
+            model = NeuralClassifier(
+                input_dim=384,
+                hidden_dims=[256, 128],
+                num_classes=7,
+                dropout=0.5
+            )
 
         # Load state dict into model
         model.load_state_dict(state_dict)
