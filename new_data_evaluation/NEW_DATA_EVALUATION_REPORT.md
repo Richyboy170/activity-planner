@@ -122,6 +122,55 @@ Teen+ (11+ |     0      |     0      |     1      |     28
 
 ## 9. Conclusions and Recommendations
 
+### ⚠ POOR PERFORMANCE (2/10)
+
+The model shows poor performance on new data:
+
+- Performance far below expectations
+- Model does not generalize well to new data
+- Not suitable for production use in current state
+
+**Key Findings:**
+
+1. **Severe Performance Degradation:**
+   - Accuracy dropped from 37% to 8% on new data
+   - Model is heavily biased toward predicting "Teen+" class
+   - Only 8 out of 96 samples classified correctly
+
+2. **Class Distribution Mismatch:**
+   - Training/test data likely had more "Teen+" samples
+   - New evaluation data has 0% Teen+ samples
+   - Model fails to adapt to different class distributions
+
+3. **Random Forest Outperforms Neural Network:**
+   - Random Forest achieved 54.63% accuracy on original test set
+   - Neural Network only achieved 37.04% on same test set
+   - Simpler model may be more appropriate for this task
+
+**Recommendations:**
+
+1. **Immediate Actions:**
+   - Do NOT deploy current neural network model to production
+   - Consider using Random Forest baseline instead (54.63% accuracy)
+   - Collect performance metrics from Random Forest on new data
+
+2. **Model Improvement:**
+   - Complete model redesign likely required
+   - Address severe class imbalance in training data
+   - Implement proper data augmentation and balancing techniques
+   - Consider ensemble methods or different architecture
+
+3. **Data Collection:**
+   - Investigate data quality and labeling consistency
+   - Collect more diverse training samples across all age groups
+   - Ensure training data distribution matches expected deployment scenarios
+   - Balance class representation in training set
+
+4. **Alternative Approaches:**
+   - Evaluate Random Forest baseline on new data
+   - Consider simpler models (Logistic Regression, SVM)
+   - Implement proper cross-validation with stratified sampling
+   - Use calibration techniques to improve probability estimates
 
 ---
 
