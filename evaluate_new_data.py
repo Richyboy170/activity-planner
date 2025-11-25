@@ -107,6 +107,7 @@ class NewDataEvaluator:
 
         # Load baseline performance from original test set
         self.baseline_metrics = self._load_baseline_metrics()
+        self.rf_baseline_metrics = self._load_rf_baseline_metrics()
 
         # Age group mapping
         self.age_groups = {
@@ -236,6 +237,15 @@ class NewDataEvaluator:
                 report = json.load(f)
                 # Try 'primary_model' first (current format), then 'neural_network' (legacy format)
                 return report.get('primary_model', report.get('neural_network', {}))
+        return {}
+
+    def _load_rf_baseline_metrics(self) -> Dict:
+        """Load Random Forest baseline performance metrics from original test set."""
+        test_report_path = Path('test_results') / 'test_report.json'
+        if test_report_path.exists():
+            with open(test_report_path, 'r') as f:
+                report = json.load(f)
+                return report.get('baseline_model', {})
         return {}
 
     def load_new_data(self, csv_path: str, data_source_description: str) -> Tuple[List[str], np.ndarray]:
@@ -553,6 +563,81 @@ class NewDataEvaluator:
 
         return comparison
 
+    def compare_rf_with_baseline(self, new_data_results: Dict) -> Dict:
+        """
+        Compare Random Forest new data performance with baseline (original test set).
+
+        Args:
+            new_data_results: Results from Random Forest new data evaluation
+
+        Returns:
+            Dictionary containing comparison analysis
+        """
+        logger.info("Comparing Random Forest new data performance with baseline...")
+
+        if not self.rf_baseline_metrics:
+            logger.warning("No Random Forest baseline metrics found. Skipping comparison.")
+            return {}
+
+        baseline_acc = self.rf_baseline_metrics.get('accuracy', 0)
+        new_acc = new_data_results['overall_metrics']['accuracy']
+
+        baseline_f1 = self.rf_baseline_metrics.get('f1_score', 0)
+        new_f1 = new_data_results['overall_metrics']['f1_score']
+
+        comparison = {
+            'accuracy': {
+                'baseline': float(baseline_acc),
+                'new_data': float(new_acc),
+                'difference': float(new_acc - baseline_acc),
+                'relative_change_pct': float((new_acc - baseline_acc) / baseline_acc * 100) if baseline_acc > 0 else 0
+            },
+            'f1_score': {
+                'baseline': float(baseline_f1),
+                'new_data': float(new_f1),
+                'difference': float(new_f1 - baseline_f1),
+                'relative_change_pct': float((new_f1 - baseline_f1) / baseline_f1 * 100) if baseline_f1 > 0 else 0
+            }
+        }
+
+        # Determine performance assessment
+        acc_threshold = 0.85  # 85% accuracy threshold for "meets expectations"
+        acc_drop_threshold = 0.10  # 10% absolute drop is concerning
+
+        if new_acc >= acc_threshold and abs(new_acc - baseline_acc) <= acc_drop_threshold:
+            assessment = "EXCELLENT"
+            rubric_score = 10
+            rubric_description = "Random Forest performance meets/exceeds expectations on new data"
+        elif new_acc >= 0.70 and new_acc < acc_threshold:
+            assessment = "ACCEPTABLE"
+            rubric_score = 7
+            rubric_description = "Random Forest performance does not meet expectations but is reasonable"
+        elif new_acc >= 0.50:
+            assessment = "INCONSISTENT"
+            rubric_score = 4
+            rubric_description = "Random Forest performs inconsistently on new samples"
+        elif new_acc > 0:
+            assessment = "POOR"
+            rubric_score = 2
+            rubric_description = "Random Forest performance is far below expectations"
+        else:
+            assessment = "FAILED"
+            rubric_score = 0
+            rubric_description = "No successful evaluation"
+
+        comparison['performance_assessment'] = {
+            'assessment': assessment,
+            'rubric_score': rubric_score,
+            'rubric_description': rubric_description,
+            'meets_expectations': new_acc >= acc_threshold,
+            'within_acceptable_range': abs(new_acc - baseline_acc) <= acc_drop_threshold
+        }
+
+        logger.info(f"Random Forest Performance Assessment: {assessment} ({rubric_score}/10)")
+        logger.info(f"Random Forest New Data Accuracy: {new_acc:.4f} | Baseline: {baseline_acc:.4f}")
+
+        return comparison
+
     def compare_models(self, nn_results: Dict, rf_results: Dict) -> Dict:
         """
         Compare Neural Network and Random Forest performance on new data.
@@ -608,7 +693,7 @@ class NewDataEvaluator:
 
         return comparison
 
-    def generate_visualizations(self, results: Dict, comparison: Dict, rf_results: Dict = None, model_comparison: Dict = None):
+    def generate_visualizations(self, results: Dict, comparison: Dict, rf_results: Dict = None, model_comparison: Dict = None, rf_baseline_comparison: Dict = None):
         """Generate visualization plots for the evaluation."""
         logger.info("Generating visualizations...")
 
@@ -623,11 +708,15 @@ class NewDataEvaluator:
         if rf_results:
             self._plot_confusion_matrix(rf_results, model_name='Random Forest')
 
-        # 3. Performance Comparison with Baseline
+        # 3. Performance Comparison with Baseline - Neural Network
         if comparison:
-            self._plot_performance_comparison(comparison)
+            self._plot_performance_comparison(comparison, model_name='Neural Network')
 
-        # 4. Model Comparison (Neural Network vs Random Forest)
+        # 4. Performance Comparison with Baseline - Random Forest (if available)
+        if rf_baseline_comparison:
+            self._plot_performance_comparison(rf_baseline_comparison, model_name='Random Forest')
+
+        # 5. Model Comparison (Neural Network vs Random Forest)
         if model_comparison:
             self._plot_model_comparison(model_comparison)
 
@@ -669,7 +758,7 @@ class NewDataEvaluator:
         plt.savefig(self.figures_dir / filename, dpi=300, bbox_inches='tight')
         plt.close()
 
-    def _plot_performance_comparison(self, comparison: Dict):
+    def _plot_performance_comparison(self, comparison: Dict, model_name: str = 'Model'):
         """Plot comparison between baseline and new data performance."""
         metrics = ['accuracy', 'f1_score']
         baseline_vals = [comparison[m]['baseline'] for m in metrics]
@@ -684,7 +773,7 @@ class NewDataEvaluator:
 
         ax.set_xlabel('Metric', fontsize=12)
         ax.set_ylabel('Score', fontsize=12)
-        ax.set_title('Performance Comparison: Baseline vs New Data', fontsize=14, fontweight='bold')
+        ax.set_title(f'Performance Comparison: Baseline vs New Data - {model_name}', fontsize=14, fontweight='bold')
         ax.set_xticks(x)
         ax.set_xticklabels(['Accuracy', 'F1-Score'])
         ax.legend()
@@ -700,7 +789,8 @@ class NewDataEvaluator:
                        ha='center', va='bottom', fontsize=10)
 
         plt.tight_layout()
-        plt.savefig(self.figures_dir / 'baseline_vs_new_comparison.png', dpi=300, bbox_inches='tight')
+        filename = f'baseline_vs_new_comparison_{model_name.lower().replace(" ", "_")}.png'
+        plt.savefig(self.figures_dir / filename, dpi=300, bbox_inches='tight')
         plt.close()
 
     def _plot_model_comparison(self, model_comparison: Dict):
@@ -796,7 +886,7 @@ class NewDataEvaluator:
         plt.savefig(self.figures_dir / filename, dpi=300, bbox_inches='tight')
         plt.close()
 
-    def generate_report(self, results: Dict, comparison: Dict, data_path: str, rf_results: Dict = None, model_comparison: Dict = None) -> str:
+    def generate_report(self, results: Dict, comparison: Dict, data_path: str, rf_results: Dict = None, model_comparison: Dict = None, rf_baseline_comparison: Dict = None) -> str:
         """Generate comprehensive evaluation report in Markdown format."""
         logger.info("Generating evaluation report...")
 
@@ -900,13 +990,40 @@ class NewDataEvaluator:
                 "- **max_depth:** 20",
                 "- **Purpose:** Simple, interpretable, minimal tuning baseline",
                 "",
-                "### Overall Metrics",
+                "### Overall Metrics on New Data",
                 "",
                 f"- **Accuracy:** {rf_results['overall_metrics']['accuracy']:.4f} ({rf_results['overall_metrics']['accuracy']*100:.2f}%)",
                 f"- **Precision:** {rf_results['overall_metrics']['precision']:.4f}",
                 f"- **Recall:** {rf_results['overall_metrics']['recall']:.4f}",
                 f"- **F1-Score:** {rf_results['overall_metrics']['f1_score']:.4f}",
                 "",
+            ])
+
+            # Add Random Forest baseline comparison if available
+            if rf_baseline_comparison:
+                assessment = rf_baseline_comparison['performance_assessment']
+                report_lines.extend([
+                    "### Random Forest: Baseline (Original Test Set) vs New Data",
+                    "",
+                    "| Metric | Baseline | New Data | Difference | Change % |",
+                    "|--------|----------|----------|------------|----------|",
+                    f"| Accuracy | {rf_baseline_comparison['accuracy']['baseline']:.4f} | {rf_baseline_comparison['accuracy']['new_data']:.4f} | {rf_baseline_comparison['accuracy']['difference']:+.4f} | {rf_baseline_comparison['accuracy']['relative_change_pct']:+.2f}% |",
+                    f"| F1-Score | {rf_baseline_comparison['f1_score']['baseline']:.4f} | {rf_baseline_comparison['f1_score']['new_data']:.4f} | {rf_baseline_comparison['f1_score']['difference']:+.4f} | {rf_baseline_comparison['f1_score']['relative_change_pct']:+.2f}% |",
+                    "",
+                    "### Random Forest Performance Assessment",
+                    "",
+                    f"**Assessment:** {assessment['assessment']}",
+                    "",
+                    f"**Rubric Score:** {assessment['rubric_score']}/10",
+                    "",
+                    f"**Description:** {assessment['rubric_description']}",
+                    "",
+                    f"- Meets Expectations: {'✓ Yes' if assessment['meets_expectations'] else '✗ No'}",
+                    f"- Within Acceptable Range: {'✓ Yes' if assessment['within_acceptable_range'] else '✗ No'}",
+                    "",
+                ])
+
+            report_lines.extend([
                 "---",
                 "",
                 "## 5. Model Comparison: Neural Network vs Random Forest",
@@ -1118,11 +1235,17 @@ class NewDataEvaluator:
             "### Comparisons",
         ])
 
+        viz_num = 7
         if comparison:
-            report_lines.append("7. **Baseline Comparison:** `figures/baseline_vs_new_comparison.png`")
+            report_lines.append(f"{viz_num}. **Neural Network Baseline Comparison:** `figures/baseline_vs_new_comparison_neural_network.png`")
+            viz_num += 1
+
+        if rf_baseline_comparison:
+            report_lines.append(f"{viz_num}. **Random Forest Baseline Comparison:** `figures/baseline_vs_new_comparison_random_forest.png`")
+            viz_num += 1
 
         if model_comparison:
-            report_lines.append("8. **Model Comparison:** `figures/neural_network_vs_random_forest.png`")
+            report_lines.append(f"{viz_num}. **Model Comparison:** `figures/neural_network_vs_random_forest.png`")
 
         report_lines.extend([
             "",
@@ -1150,7 +1273,7 @@ class NewDataEvaluator:
         logger.info(f"Report saved to {report_path}")
         return report_content
 
-    def save_results(self, results: Dict, comparison: Dict, rf_results: Dict = None, model_comparison: Dict = None):
+    def save_results(self, results: Dict, comparison: Dict, rf_results: Dict = None, model_comparison: Dict = None, rf_baseline_comparison: Dict = None):
         """Save results to JSON file."""
         output = {
             'metadata': self.evaluation_metadata,
@@ -1164,6 +1287,9 @@ class NewDataEvaluator:
 
         if model_comparison:
             output['model_comparison'] = model_comparison
+
+        if rf_baseline_comparison:
+            output['rf_baseline_comparison'] = rf_baseline_comparison
 
         results_path = self.results_dir / 'new_data_evaluation_results.json'
         with open(results_path, 'w', encoding='utf-8') as f:
@@ -1198,17 +1324,20 @@ class NewDataEvaluator:
         # Step 5: Compare Neural Network with baseline (original test set)
         comparison = self.compare_with_baseline(results)
 
-        # Step 6: Compare Neural Network with Random Forest
+        # Step 6: Compare Random Forest with baseline (original test set)
+        rf_baseline_comparison = self.compare_rf_with_baseline(rf_results) if rf_results else {}
+
+        # Step 7: Compare Neural Network with Random Forest
         model_comparison = self.compare_models(results, rf_results)
 
-        # Step 7: Generate visualizations
-        self.generate_visualizations(results, comparison, rf_results, model_comparison)
+        # Step 8: Generate visualizations
+        self.generate_visualizations(results, comparison, rf_results, model_comparison, rf_baseline_comparison)
 
-        # Step 8: Generate report
-        self.generate_report(results, comparison, new_data_path, rf_results, model_comparison)
+        # Step 9: Generate report
+        self.generate_report(results, comparison, new_data_path, rf_results, model_comparison, rf_baseline_comparison)
 
-        # Step 9: Save results
-        self.save_results(results, comparison, rf_results, model_comparison)
+        # Step 10: Save results
+        self.save_results(results, comparison, rf_results, model_comparison, rf_baseline_comparison)
 
         logger.info("="*80)
         logger.info("EVALUATION COMPLETE")
@@ -1221,13 +1350,18 @@ class NewDataEvaluator:
 
         if comparison:
             assessment = comparison['performance_assessment']
-            logger.info(f"Performance Assessment: {assessment['assessment']}")
-            logger.info(f"Rubric Score: {assessment['rubric_score']}/10")
+            logger.info(f"Neural Network Performance Assessment: {assessment['assessment']}")
+            logger.info(f"Neural Network Rubric Score: {assessment['rubric_score']}/10")
+
+        if rf_baseline_comparison:
+            rf_assessment = rf_baseline_comparison['performance_assessment']
+            logger.info(f"Random Forest Performance Assessment: {rf_assessment['assessment']}")
+            logger.info(f"Random Forest Rubric Score: {rf_assessment['rubric_score']}/10")
 
         if model_comparison:
             logger.info(f"Model Comparison Winner: {model_comparison['accuracy']['winner']}")
 
-        return results, comparison, rf_results, model_comparison
+        return results, comparison, rf_results, model_comparison, rf_baseline_comparison
 
 
 def main():
