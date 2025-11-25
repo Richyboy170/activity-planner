@@ -11,10 +11,7 @@ Both models classify activities into age groups:
 - Toddler (0-3 years)
 - Preschool (4-6 years)
 - Elementary (7-10 years)
-- Teen (11-17 years)
-- Young Adult (18-39 years)
-- Adult (40-64 years)
-- Senior (65+ years)
+- Teen+ (11+ years)
 """
 
 import torch
@@ -108,7 +105,7 @@ class ModelTester:
         self.output_dir.mkdir(exist_ok=True)
 
         # Class labels
-        self.age_groups = ['Toddler (0-3)', 'Preschool (4-6)', 'Elementary (7-10)', 'Teen (11-17)', 'Young Adult (18-39)', 'Adult (40-64)', 'Senior (65+)']
+        self.age_groups = ['Toddler (0-3)', 'Preschool (4-6)', 'Elementary (7-10)', 'Teen+ (11+)']
 
         # Results storage
         self.baseline_results = {}
@@ -132,24 +129,22 @@ class ModelTester:
         texts = processor.create_text_representations()
         embeddings = embedder.generate_embeddings(texts)
 
-        # Create age group labels
-        def get_age_group(min_age: float) -> int:
-            if min_age <= 3:
-                return 0  # Toddler
-            elif min_age <= 6:
-                return 1  # Preschool
-            elif min_age <= 10:
-                return 2  # Elementary
-            elif min_age <= 17:
-                return 3  # Teen
-            elif min_age <= 39:
-                return 4  # Young Adult
-            elif min_age <= 64:
-                return 5  # Adult
-            else:
-                return 6  # Senior
+        # Create age group labels (matching train_model-unaugmented.py)
+        def get_age_group(row) -> int:
+            age_min = row['age_min']
+            age_max = row['age_max']
+            age_mid = (age_min + age_max) / 2
 
-        labels = df['age_min'].apply(get_age_group).values
+            if age_mid <= 3.5:
+                return 0  # Toddler
+            elif age_mid <= 7:
+                return 1  # Preschool
+            elif age_mid <= 11:
+                return 2  # Elementary
+            else:
+                return 3  # Teen+
+
+        labels = df.apply(get_age_group, axis=1).values
 
         # Split data (80/10/10)
         n = len(embeddings)
@@ -198,12 +193,12 @@ class ModelTester:
             y_test, y_pred, average='weighted', zero_division=0
         )
 
-        # Confusion matrix (ensure all 7 classes are included)
-        cm = confusion_matrix(y_test, y_pred, labels=np.arange(7))
+        # Confusion matrix (ensure all 4 classes are included)
+        cm = confusion_matrix(y_test, y_pred, labels=np.arange(4))
 
-        # Per-class metrics (ensure all 7 classes are included)
+        # Per-class metrics (ensure all 4 classes are included)
         per_class_metrics = precision_recall_fscore_support(
-            y_test, y_pred, average=None, zero_division=0, labels=np.arange(7)
+            y_test, y_pred, average=None, zero_division=0, labels=np.arange(4)
         )
 
         results = {
@@ -274,7 +269,7 @@ class ModelTester:
 
             if output_layer_key:
                 num_classes_in_checkpoint = state_dict[output_layer_key].shape[0]
-                expected_num_classes = 7
+                expected_num_classes = 4
 
                 if num_classes_in_checkpoint != expected_num_classes:
                     print(f"⚠ WARNING: Checkpoint has {num_classes_in_checkpoint} output classes, but current code expects {expected_num_classes}")
@@ -284,8 +279,8 @@ class ModelTester:
                 model = ActivityClassifier(input_dim=384, hidden_dims=hidden_dims, num_classes=num_classes_in_checkpoint)
             else:
                 # Fallback: use expected architecture
-                print("⚠ Could not detect architecture from checkpoint, using default (7 classes)")
-                model = ActivityClassifier(input_dim=384, hidden_dims=hidden_dims, num_classes=7)
+                print("⚠ Could not detect architecture from checkpoint, using default (4 classes)")
+                model = ActivityClassifier(input_dim=384, hidden_dims=hidden_dims, num_classes=4)
 
             # Load the state dict
             model.load_state_dict(state_dict)
@@ -318,12 +313,12 @@ class ModelTester:
             y_test, y_pred, average='weighted', zero_division=0
         )
 
-        # Confusion matrix (ensure all 7 classes are included)
-        cm = confusion_matrix(y_test, y_pred, labels=np.arange(7))
+        # Confusion matrix (ensure all 4 classes are included)
+        cm = confusion_matrix(y_test, y_pred, labels=np.arange(4))
 
-        # Per-class metrics (ensure all 7 classes are included)
+        # Per-class metrics (ensure all 4 classes are included)
         per_class_metrics = precision_recall_fscore_support(
-            y_test, y_pred, average=None, zero_division=0, labels=np.arange(7)
+            y_test, y_pred, average=None, zero_division=0, labels=np.arange(4)
         )
 
         # Get model info
@@ -386,7 +381,7 @@ class ModelTester:
         hidden_dims = [256, 128]
 
         # Create model
-        model = ActivityClassifier(input_dim=384, hidden_dims=hidden_dims, num_classes=7).to(device)
+        model = ActivityClassifier(input_dim=384, hidden_dims=hidden_dims, num_classes=4).to(device)
         criterion = nn.CrossEntropyLoss()
         optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
