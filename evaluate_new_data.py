@@ -53,7 +53,7 @@ class NeuralClassifier(nn.Module):
     with input dropout and progressive dropout in deeper layers.
     """
 
-    def __init__(self, input_dim=384, hidden_dims=[256, 128], num_classes=4, dropout=0.5):
+    def __init__(self, input_dim=384, hidden_dims=[256, 128], num_classes=7, dropout=0.5):
         super(NeuralClassifier, self).__init__()
 
         layers = []
@@ -114,7 +114,10 @@ class NewDataEvaluator:
             0: 'Toddler (0-3)',
             1: 'Preschool (4-6)',
             2: 'Elementary (7-10)',
-            3: 'Teen+ (11+)'
+            3: 'Teen (11-17)',
+            4: 'Young Adult (18-39)',
+            5: 'Adult (40-64)',
+            6: 'Senior (65+)'
         }
 
         # Track evaluation metadata
@@ -148,7 +151,7 @@ class NewDataEvaluator:
         model = NeuralClassifier(
             input_dim=384,
             hidden_dims=[256, 128],
-            num_classes=4,
+            num_classes=7,
             dropout=0.5
         )
 
@@ -309,8 +312,14 @@ class NewDataEvaluator:
                 labels.append(1)  # Preschool
             elif age_min <= 10:
                 labels.append(2)  # Elementary
+            elif age_min <= 17:
+                labels.append(3)  # Teen
+            elif age_min <= 39:
+                labels.append(4)  # Young Adult
+            elif age_min <= 64:
+                labels.append(5)  # Adult
             else:
-                labels.append(3)  # Teen+
+                labels.append(6)  # Senior
 
         labels = np.array(labels)
 
@@ -359,7 +368,7 @@ class NewDataEvaluator:
         )
 
         # Per-class metrics
-        all_labels = list(range(4))  # All possible class labels (0, 1, 2, 3)
+        all_labels = list(range(7))  # All possible class labels (0, 1, 2, 3, 4, 5, 6)
         precision_per_class, recall_per_class, f1_per_class, support_per_class = \
             precision_recall_fscore_support(true_labels, predictions, labels=all_labels, average=None, zero_division=0)
 
@@ -370,7 +379,7 @@ class NewDataEvaluator:
         class_report = classification_report(
             true_labels, predictions,
             labels=all_labels,
-            target_names=[self.age_groups[i] for i in range(4)],
+            target_names=[self.age_groups[i] for i in range(7)],
             output_dict=True,
             zero_division=0
         )
@@ -391,7 +400,7 @@ class NewDataEvaluator:
                     'f1_score': float(f1_per_class[i]),
                     'support': int(support_per_class[i])
                 }
-                for i in range(4)
+                for i in range(7)
             },
             'confusion_matrix': conf_matrix.tolist(),
             'classification_report': class_report,
@@ -438,7 +447,7 @@ class NewDataEvaluator:
         )
 
         # Per-class metrics
-        all_labels = list(range(4))
+        all_labels = list(range(7))
         precision_per_class, recall_per_class, f1_per_class, support_per_class = \
             precision_recall_fscore_support(true_labels, predictions, labels=all_labels, average=None, zero_division=0)
 
@@ -449,7 +458,7 @@ class NewDataEvaluator:
         class_report = classification_report(
             true_labels, predictions,
             labels=all_labels,
-            target_names=[self.age_groups[i] for i in range(4)],
+            target_names=[self.age_groups[i] for i in range(7)],
             output_dict=True,
             zero_division=0
         )
@@ -470,7 +479,7 @@ class NewDataEvaluator:
                     'f1_score': float(f1_per_class[i]),
                     'support': int(support_per_class[i])
                 }
-                for i in range(4)
+                for i in range(7)
             },
             'confusion_matrix': conf_matrix.tolist(),
             'classification_report': class_report,
@@ -746,8 +755,8 @@ class NewDataEvaluator:
             annot=True,
             fmt='d',
             cmap='Blues',
-            xticklabels=[self.age_groups[i] for i in range(4)],
-            yticklabels=[self.age_groups[i] for i in range(4)],
+            xticklabels=[self.age_groups[i] for i in range(7)],
+            yticklabels=[self.age_groups[i] for i in range(7)],
             cbar_kws={'label': 'Count'}
         )
         plt.title(f'Confusion Matrix - {model_name}', fontsize=14, fontweight='bold')
@@ -1119,12 +1128,12 @@ class NewDataEvaluator:
 
         # Add confusion matrix
         conf_matrix = np.array(results['confusion_matrix'])
-        header = "         | " + " | ".join([f"{self.age_groups[i][:10]:^10}" for i in range(4)])
+        header = "         | " + " | ".join([f"{self.age_groups[i][:10]:^10}" for i in range(7)])
         report_lines.append(header)
         report_lines.append("-" * len(header))
 
-        for i in range(4):
-            row = f"{self.age_groups[i][:10]:^10} | " + " | ".join([f"{conf_matrix[i][j]:^10}" for j in range(4)])
+        for i in range(7):
+            row = f"{self.age_groups[i][:10]:^10} | " + " | ".join([f"{conf_matrix[i][j]:^10}" for j in range(7)])
             report_lines.append(row)
 
         report_lines.extend([
