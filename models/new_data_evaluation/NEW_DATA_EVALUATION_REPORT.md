@@ -1,6 +1,6 @@
 # Model Evaluation on New Data - Comprehensive Report
 
-**Evaluation Date:** 2025-11-25T11:24:42.337274
+**Evaluation Date:** 2025-11-25T11:08:02.351165
 **Model:** models\neural_classifier.pth
 **New Data Source:** dataset/evaluation_dataset.csv
 
@@ -18,16 +18,16 @@
 
 **Data Collection Method:** evaluation
 
-**Total New Samples:** 70
+**Total New Samples:** 147
 
 ### Class Distribution in New Data
 
 | Age Group | Count | Percentage |
 |-----------|-------|------------|
-| Toddler (0-3) | 25 | 35.7% |
-| Preschool (4-6) | 10 | 14.3% |
-| Elementary (7-10) | 6 | 8.6% |
-| Teen+ (11+) | 29 | 41.4% |
+| Toddler (0-3) | 39 | 26.5% |
+| Preschool (4-6) | 25 | 17.0% |
+| Elementary (7-10) | 34 | 23.1% |
+| Teen+ (11+) | 49 | 33.3% |
 
 ---
 
@@ -35,18 +35,18 @@
 
 ### Key Metrics
 
-- **Accuracy:** 0.5000 (50.00%)
-- **Precision:** 0.6578
-- **Recall:** 0.5000
-- **F1-Score:** 0.4377
+- **Accuracy:** 0.3673 (36.73%)
+- **Precision:** 0.5011
+- **Recall:** 0.3673
+- **F1-Score:** 0.3164
 
 ### Prediction Confidence Statistics
 
-- **Mean Confidence:** 0.7402
-- **Median Confidence:** 0.7907
-- **Std Deviation:** 0.1886
-- **Min Confidence:** 0.3520
-- **Max Confidence:** 0.9947
+- **Mean Confidence:** 0.7491
+- **Median Confidence:** 0.7730
+- **Std Deviation:** 0.1738
+- **Min Confidence:** 0.3524
+- **Max Confidence:** 0.9950
 
 ---
 
@@ -56,19 +56,19 @@
 
 | Metric | Baseline | New Data | Difference | Change % |
 |--------|----------|----------|------------|----------|
-| Accuracy | 0.3704 | 0.5000 | +0.1296 | +35.00% |
-| F1-Score | 0.3364 | 0.4377 | +0.1012 | +30.09% |
+| Accuracy | 0.3704 | 0.3673 | -0.0030 | -0.82% |
+| F1-Score | 0.3364 | 0.3164 | -0.0201 | -5.97% |
 
 ### Performance Assessment
 
-**Assessment:** INCONSISTENT
+**Assessment:** POOR
 
-**Rubric Score:** 4/10
+**Rubric Score:** 2/10
 
-**Description:** Model performs inconsistently on new samples
+**Description:** Model performance is far below expectations
 
 - Meets Expectations: ✗ No
-- Within Acceptable Range: ✗ No
+- Within Acceptable Range: ✓ Yes
 
 ---
 
@@ -76,10 +76,10 @@
 
 | Age Group | Precision | Recall | F1-Score | Support |
 |-----------|-----------|--------|----------|---------|
-| Toddler (0-3) | 1.0000 | 0.1200 | 0.2143 | 25 |
-| Preschool (4-6) | 0.2000 | 0.2000 | 0.2000 | 10 |
-| Elementary (7-10) | 0.1667 | 0.3333 | 0.2222 | 6 |
-| Teen+ (11+) | 0.6222 | 0.9655 | 0.7568 | 29 |
+| Toddler (0-3) | 1.0000 | 0.0769 | 0.1429 | 39 |
+| Preschool (4-6) | 0.0833 | 0.0800 | 0.0816 | 25 |
+| Elementary (7-10) | 0.2821 | 0.3235 | 0.3014 | 34 |
+| Teen+ (11+) | 0.4691 | 0.7755 | 0.5846 | 49 |
 
 ---
 
@@ -88,39 +88,39 @@
 ```
 Toddler (0-3):
   Precision: 1.0000
-  Recall: 0.1200
-  F1-Score: 0.2143
-  Support: 25.0
+  Recall: 0.0769
+  F1-Score: 0.1429
+  Support: 39.0
 
 Preschool (4-6):
-  Precision: 0.2000
-  Recall: 0.2000
-  F1-Score: 0.2000
-  Support: 10.0
+  Precision: 0.0833
+  Recall: 0.0800
+  F1-Score: 0.0816
+  Support: 25.0
 
 Elementary (7-10):
-  Precision: 0.1667
-  Recall: 0.3333
-  F1-Score: 0.2222
-  Support: 6.0
+  Precision: 0.2821
+  Recall: 0.3235
+  F1-Score: 0.3014
+  Support: 34.0
 
 Teen+ (11+):
-  Precision: 0.6222
-  Recall: 0.9655
-  F1-Score: 0.7568
-  Support: 29.0
+  Precision: 0.4691
+  Recall: 0.7755
+  F1-Score: 0.5846
+  Support: 49.0
 
 macro avg:
-  Precision: 0.4972
-  Recall: 0.4047
-  F1-Score: 0.3483
-  Support: 70.0
+  Precision: 0.4586
+  Recall: 0.3140
+  F1-Score: 0.2776
+  Support: 147.0
 
 weighted avg:
-  Precision: 0.6578
-  Recall: 0.5000
-  F1-Score: 0.4377
-  Support: 70.0
+  Precision: 0.5011
+  Recall: 0.3673
+  F1-Score: 0.3164
+  Support: 147.0
 
 ```
 
@@ -134,30 +134,30 @@ See `figures/confusion_matrix_neural_network.png` for visualization.
 ```
          | Toddler (0 | Preschool  | Elementary | Teen+ (11+
 ------------------------------------------------------------
-Toddler (0 |     3      |     8      |     7      |     7     
-Preschool  |     0      |     2      |     2      |     6     
-Elementary |     0      |     0      |     2      |     4     
-Teen+ (11+ |     0      |     0      |     1      |     28    
+Toddler (0 |     3      |     16     |     9      |     11    
+Preschool  |     0      |     2      |     11     |     12    
+Elementary |     0      |     3      |     11     |     20    
+Teen+ (11+ |     0      |     3      |     8      |     38    
 ```
 
 ---
 
 ## 9. Conclusions and Recommendations
 
-### ⚠ INCONSISTENT PERFORMANCE (4/10)
+### ✗ POOR PERFORMANCE (≤2/10)
 
-The model shows inconsistent performance on new data:
+The model shows poor performance on new data:
 
-- Significant performance drop compared to baseline
-- Model may be overfitting to training data
-- Substantial improvement needed before production use
+- Performance far below expectations
+- Model does not generalize to new data
+- Not suitable for production use
 
 **Recommendations:**
-- Investigate data distribution shift between train and new data
-- Consider regularization techniques to improve generalization
-- Expand training dataset with more diverse samples
-- Review feature engineering approach
-- Retrain model with adjusted hyperparameters
+- Complete model redesign likely required
+- Review problem formulation and feature selection
+- Investigate data quality and labeling consistency
+- Consider alternative modeling approaches
+- Increase training dataset size substantially
 
 ---
 
@@ -179,7 +179,7 @@ The following visualizations have been generated:
 
 ```json
 {
-  "evaluation_date": "2025-11-25T11:24:42.337274",
+  "evaluation_date": "2025-11-25T11:08:02.351165",
   "model_path": "models\\neural_classifier.pth",
   "new_data_source": "dataset/evaluation_dataset.csv",
   "data_collection_method": "evaluation",

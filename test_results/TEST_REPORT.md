@@ -1,6 +1,6 @@
 # Model Testing Report
 
-**Test Date:** 2025-11-22T18:13:25.287657
+**Test Date:** 2025-11-25T13:41:13.826361
 
 ---
 
@@ -24,19 +24,19 @@ Random Forest was chosen as the baseline because:
 
 ### Quantitative Results
 
-- **Accuracy:** 0.5463
-- **Precision:** 0.6248
-- **Recall:** 0.5463
-- **F1 Score:** 0.5192
+- **Accuracy:** 0.6296
+- **Precision:** 0.6311
+- **Recall:** 0.6296
+- **F1 Score:** 0.6196
 
 ### Per-Class Performance
 
 | Age Group | Precision | Recall | F1 Score |
 |-----------|-----------|--------|----------|
-| Toddler (0-3) | 1.0000 | 0.1429 | 0.2500 |
-| Preschool (4-6) | 0.4915 | 0.8788 | 0.6304 |
-| Elementary (7-10) | 0.5312 | 0.4595 | 0.4928 |
-| Teen+ (11+) | 0.7333 | 0.4583 | 0.5641 |
+| Toddler (0-3) | 0.7000 | 0.3043 | 0.4242 |
+| Preschool (4-6) | 0.5319 | 0.5319 | 0.5319 |
+| Elementary (7-10) | 0.5192 | 0.5625 | 0.5400 |
+| Teen+ (11+) | 0.7500 | 0.8451 | 0.7947 |
 
 ## Primary Model: Neural Network
 
@@ -70,37 +70,37 @@ The multi-layer neural network architecture was chosen because:
 
 ### Quantitative Results
 
-- **Accuracy:** 0.3704
-- **Precision:** 0.3997
-- **Recall:** 0.3704
-- **F1 Score:** 0.3364
+- **Accuracy:** 0.5926
+- **Precision:** 0.5753
+- **Recall:** 0.5926
+- **F1 Score:** 0.5659
 
 ### Per-Class Performance
 
 | Age Group | Precision | Recall | F1 Score |
 |-----------|-----------|--------|----------|
-| Toddler (0-3) | 0.8333 | 0.3571 | 0.5000 |
-| Preschool (4-6) | 0.4286 | 0.1818 | 0.2553 |
-| Elementary (7-10) | 0.2000 | 0.1892 | 0.1944 |
-| Teen+ (11+) | 0.4151 | 0.9167 | 0.5714 |
+| Toddler (0-3) | 0.7647 | 0.5652 | 0.6500 |
+| Preschool (4-6) | 0.5185 | 0.2979 | 0.3784 |
+| Elementary (7-10) | 0.4000 | 0.3750 | 0.3871 |
+| Teen+ (11+) | 0.6700 | 0.9437 | 0.7836 |
 
 ## Model Comparison
 
-- **Accuracy Improvement:** -0.1759 (-17.59%)
-- **F1 Score Improvement:** -0.1828 (-18.28%)
+- **Accuracy Improvement:** -0.0370 (-3.70%)
+- **F1 Score Improvement:** -0.0537 (-5.37%)
 - **Better Performing Model:** Baseline
 
 ## Qualitative Analysis
 
 ### Prediction Categories
 
-**Both Correct:** 18 samples
+**Both Correct:** 83 samples
 
-**Both Wrong:** 27 samples
+**Both Wrong:** 41 samples
 
-**Baseline Correct, Primary Wrong:** 41 samples
+**Baseline Correct, Primary Wrong:** 36 samples
 
-**Primary Correct, Baseline Wrong:** 22 samples
+**Primary Correct, Baseline Wrong:** 29 samples
 
 ## Visualizations
 

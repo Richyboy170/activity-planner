@@ -519,7 +519,7 @@ class NeuralTrainer:
 
         return avg_test_loss, accuracy
 
-    def train(self, num_epochs: int = 50, learning_rate: float = 0.001, patience: int = 10):
+    def train(self, num_epochs: int = 100, learning_rate: float = 0.0005, patience: int = 20):
         """Full training loop with train/validation/test evaluation and early stopping"""
         logger.info(f"\n[Neural Network] Starting training for {num_epochs} epochs...")
         logger.info(f"  Learning rate: {learning_rate}")
@@ -594,8 +594,8 @@ class NeuralTrainer:
 
         return test_loss, test_acc
 
-    def cross_validate(self, embeddings: np.ndarray, labels: np.ndarray, k_folds: int = 5,
-                      num_epochs: int = 50, learning_rate: float = 0.001):
+    def cross_validate(self, embeddings: np.ndarray, labels: np.ndarray, k_folds: int = 10,
+                      num_epochs: int = 100, learning_rate: float = 0.0005):
         """Perform K-fold cross-validation to evaluate model generalization"""
         logger.info(f"\n[K-Fold Cross-Validation] Starting {k_folds}-fold cross-validation...")
         logger.info(f"  Dataset size: {len(embeddings)}")
@@ -646,7 +646,7 @@ class NeuralTrainer:
 
             # Train this fold with early stopping
             best_val_loss = float('inf')
-            patience = 10
+            patience = 20
             epochs_without_improvement = 0
 
             for epoch in range(num_epochs):
@@ -817,9 +817,9 @@ class ModelTrainer:
         cv_results, avg_cv_loss, avg_cv_acc = self.neural_trainer.cross_validate(
             self.dense_embedder.embeddings,
             labels,
-            k_folds=5,
-            num_epochs=50,
-            learning_rate=0.001
+            k_folds=10,
+            num_epochs=100,
+            learning_rate=0.0005
         )
 
         # Step 6: Train final neural network on full train/val/test split
@@ -829,7 +829,7 @@ class ModelTrainer:
             input_dim=self.dense_embedder.embeddings.shape[1],
             num_classes=num_classes
         )
-        test_loss, test_acc = self.neural_trainer.train(num_epochs=50, learning_rate=0.001, patience=10)
+        test_loss, test_acc = self.neural_trainer.train(num_epochs=100, learning_rate=0.0005, patience=20)
         self.neural_trainer.save(self.config.output_dir)
 
         # Step 7: Test pipeline
