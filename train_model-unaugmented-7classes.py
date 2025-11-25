@@ -14,8 +14,6 @@ import pickle
 import json
 import os
 import logging
-import time
-import psutil
 from datetime import datetime
 from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass, asdict
@@ -38,32 +36,6 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
-
-
-def get_memory_usage():
-    """Get current memory usage in MB"""
-    process = psutil.Process(os.getpid())
-    return process.memory_info().rss / 1024 / 1024
-
-
-def log_memory_usage(context: str = ""):
-    """Log current memory usage with context"""
-    mem_mb = get_memory_usage()
-    logger.info(f"  💾 Memory usage{f' ({context})' if context else ''}: {mem_mb:.2f} MB")
-
-
-def format_time(seconds: float) -> str:
-    """Format seconds into human-readable time string"""
-    if seconds < 60:
-        return f"{seconds:.1f}s"
-    elif seconds < 3600:
-        mins = int(seconds // 60)
-        secs = int(seconds % 60)
-        return f"{mins}m {secs}s"
-    else:
-        hours = int(seconds // 3600)
-        mins = int((seconds % 3600) // 60)
-        return f"{hours}h {mins}m"
 
 
 @dataclass
@@ -366,33 +338,41 @@ class NeuralTrainer:
         """Split data into train/validation/test sets with balanced age group distribution"""
         logger.info("\n[Neural Network] Preparing train/validation/test split with balanced distribution...")
 
-        # Create labels based on age groups using age midpoint for better accuracy
-        # Toddler (0-3): 0, Preschool (4-6): 1, Elementary (7-10): 2, Teen+ (11+): 3
+        # Create labels based on age groups
+        # Use min age for classification (consistent with test_models.py)
         labels = []
-        label_names = ['Toddler (0-3)', 'Preschool (4-6)', 'Elementary (7-10)', 'Teen+ (11+)']
+        label_names = ['Toddler (0-3)', 'Preschool (4-6)', 'Elementary (7-10)', 'Teen (11-17)', 'Young Adult (18-39)', 'Adult (40-64)', 'Senior (65+)']
 
         for idx, row in df_activities.iterrows():
-            # Use midpoint of age range for more accurate classification
             age_min = row['age_min']
-            age_max = row['age_max']
-            age_mid = (age_min + age_max) / 2
 
-            if age_mid <= 3.5:
+            if age_min <= 3:
                 labels.append(0)  # Toddler
-            elif age_mid <= 7:
+            elif age_min <= 6:
                 labels.append(1)  # Preschool
-            elif age_mid <= 11:
+            elif age_min <= 10:
                 labels.append(2)  # Elementary
+            elif age_min <= 17:
+                labels.append(3)  # Teen
+            elif age_min <= 39:
+                labels.append(4)  # Young Adult
+            elif age_min <= 64:
+                labels.append(5)  # Adult
             else:
-                labels.append(3)  # Teen+
+                labels.append(6)  # Senior
 
         labels = np.array(labels)
 
         # Display distribution in full dataset
         logger.info("\n  Age Group Distribution in Full Dataset:")
-        unique, counts = np.unique(labels, return_counts=True)
-        for label, count in zip(unique, counts):
+        unique_full, counts_full = np.unique(labels, return_counts=True)
+        for label, count in zip(unique_full, counts_full):
             logger.info(f"    {label_names[label]}: {count} ({count/len(labels)*100:.1f}%)")
+
+        # Store class counts from full dataset for weighted loss calculation
+        # This ensures all classes are represented even if some splits don't have all classes
+        self.class_counts = counts_full.copy()
+        self.num_classes = len(unique_full)
 
         # Stratified split to ensure balanced distribution across all sets
         # First split: separate test set (10%)
@@ -407,18 +387,18 @@ class NeuralTrainer:
 
         # Display distribution in each split
         logger.info(f"\n✓ Train set: {len(X_train)} samples ({len(X_train)/len(embeddings)*100:.1f}%)")
-        unique, counts = np.unique(y_train, return_counts=True)
-        for label, count in zip(unique, counts):
+        unique_train, counts_train = np.unique(y_train, return_counts=True)
+        for label, count in zip(unique_train, counts_train):
             logger.info(f"    {label_names[label]}: {count} ({count/len(y_train)*100:.1f}%)")
 
         logger.info(f"\n✓ Validation set: {len(X_val)} samples ({len(X_val)/len(embeddings)*100:.1f}%)")
-        unique, counts = np.unique(y_val, return_counts=True)
-        for label, count in zip(unique, counts):
+        unique_val, counts_val = np.unique(y_val, return_counts=True)
+        for label, count in zip(unique_val, counts_val):
             logger.info(f"    {label_names[label]}: {count} ({count/len(y_val)*100:.1f}%)")
 
         logger.info(f"\n✓ Test set: {len(X_test)} samples ({len(X_test)/len(embeddings)*100:.1f}%)")
-        unique, counts = np.unique(y_test, return_counts=True)
-        for label, count in zip(unique, counts):
+        unique_test, counts_test = np.unique(y_test, return_counts=True)
+        for label, count in zip(unique_test, counts_test):
             logger.info(f"    {label_names[label]}: {count} ({count/len(y_test)*100:.1f}%)")
 
         # Create datasets
@@ -434,11 +414,7 @@ class NeuralTrainer:
 
         logger.info("\n✓ Balanced distribution ensured: Each epoch will see the same proportion of age groups")
 
-        # Store class counts for weighted loss calculation
-        self.class_counts = counts.copy()
-        self.num_classes = len(np.unique(labels))
-
-        return len(np.unique(labels))
+        return self.num_classes
 
     def build_model(self, input_dim: int, num_classes: int):
         """Build neural network model with heavy regularization"""
@@ -547,16 +523,13 @@ class NeuralTrainer:
 
         return avg_test_loss, accuracy
 
-    def train(self, num_epochs: int = 50, learning_rate: float = 0.001, patience: int = 10):
+    def train(self, num_epochs: int = 100, learning_rate: float = 0.0005, patience: int = 20):
         """Full training loop with train/validation/test evaluation and early stopping"""
-        train_start_time = time.time()
-
         logger.info(f"\n[Neural Network] Starting training for {num_epochs} epochs...")
         logger.info(f"  Learning rate: {learning_rate}")
         logger.info(f"  L2 Regularization (weight_decay): 1e-4 (increased from 1e-5)")
         logger.info(f"  Early stopping patience: {patience} epochs")
         logger.info(f"  Device: {self.device}")
-        log_memory_usage("before training")
         logger.info("="*70)
 
         # Calculate class weights inversely proportional to frequency
@@ -566,7 +539,7 @@ class NeuralTrainer:
         class_weights = class_weights.to(self.device)
 
         logger.info(f"\n  Class Weights (to address imbalance):")
-        label_names = ['Toddler (0-3)', 'Preschool (4-6)', 'Elementary (7-10)', 'Teen+ (11+)']
+        label_names = ['Toddler (0-3)', 'Preschool (4-6)', 'Elementary (7-10)', 'Teen (11-17)', 'Young Adult (18-39)', 'Adult (40-64)', 'Senior (65+)']
         for i, weight in enumerate(class_weights):
             logger.info(f"    {label_names[i]}: {weight:.4f}")
 
@@ -613,13 +586,9 @@ class NeuralTrainer:
             self.model.load_state_dict(best_model_state)
             logger.info("\n✓ Restored best model from checkpoint")
 
-        train_total_time = time.time() - train_start_time
-
         logger.info("\n" + "="*70)
         logger.info("[Neural Network] Training complete!")
         logger.info("="*70)
-        logger.info(f"⏱ Training Time: {format_time(train_total_time)}")
-        log_memory_usage("after training")
 
         # Final test evaluation
         logger.info("\n[Neural Network] Evaluating on test set...")
@@ -629,22 +598,18 @@ class NeuralTrainer:
 
         return test_loss, test_acc
 
-    def cross_validate(self, embeddings: np.ndarray, labels: np.ndarray, k_folds: int = 5,
-                      num_epochs: int = 50, learning_rate: float = 0.001):
+    def cross_validate(self, embeddings: np.ndarray, labels: np.ndarray, k_folds: int = 10,
+                      num_epochs: int = 100, learning_rate: float = 0.0005):
         """Perform K-fold cross-validation to evaluate model generalization"""
         logger.info(f"\n[K-Fold Cross-Validation] Starting {k_folds}-fold cross-validation...")
         logger.info(f"  Dataset size: {len(embeddings)}")
         logger.info(f"  Number of folds: {k_folds}")
-        logger.info(f"  Max epochs per fold: {num_epochs}")
         logger.info("="*70)
-
-        cv_start_time = time.time()
-        log_memory_usage("before cross-validation")
 
         kfold = KFold(n_splits=k_folds, shuffle=True, random_state=42)
         fold_results = []
 
-        label_names = ['Toddler (0-3)', 'Preschool (4-6)', 'Elementary (7-10)', 'Teen+ (11+)']
+        label_names = ['Toddler (0-3)', 'Preschool (4-6)', 'Elementary (7-10)', 'Teen (11-17)', 'Young Adult (18-39)', 'Adult (40-64)', 'Senior (65+)']
 
         for fold_idx, (train_idx, val_idx) in enumerate(kfold.split(embeddings)):
             logger.info(f"\n{'='*70}")
@@ -685,16 +650,10 @@ class NeuralTrainer:
 
             # Train this fold with early stopping
             best_val_loss = float('inf')
-            patience = 10
+            patience = 20
             epochs_without_improvement = 0
 
-            fold_start_time = time.time()
-
-            # Create progress bar for epochs
-            epoch_pbar = tqdm(range(num_epochs), desc=f"  Training Fold {fold_idx + 1}",
-                            unit="epoch", leave=False, position=0)
-
-            for epoch in epoch_pbar:
+            for epoch in range(num_epochs):
                 # Train
                 model.train()
                 train_loss = 0.0
@@ -729,14 +688,6 @@ class NeuralTrainer:
                 avg_val_loss = val_loss / len(val_loader)
                 val_acc = 100 * correct / total
 
-                # Update progress bar
-                epoch_pbar.set_postfix({
-                    'train_loss': f'{avg_train_loss:.4f}',
-                    'val_loss': f'{avg_val_loss:.4f}',
-                    'val_acc': f'{val_acc:.1f}%',
-                    'no_improve': epochs_without_improvement
-                })
-
                 # Early stopping
                 if avg_val_loss < best_val_loss:
                     best_val_loss = avg_val_loss
@@ -746,13 +697,8 @@ class NeuralTrainer:
                     epochs_without_improvement += 1
 
                 if epochs_without_improvement >= patience:
-                    epoch_pbar.close()
-                    logger.info(f"  ⚠ Early stopping at epoch {epoch+1} (patience reached)")
+                    logger.info(f"  Early stopping at epoch {epoch+1}")
                     break
-
-            epoch_pbar.close()
-            fold_time = time.time() - fold_start_time
-            logger.info(f"  ⏱ Fold {fold_idx + 1} completed in {format_time(fold_time)}")
 
             logger.info(f"\n  Fold {fold_idx + 1} Results:")
             logger.info(f"    Best Val Loss: {best_val_loss:.4f}")
@@ -765,8 +711,6 @@ class NeuralTrainer:
             })
 
         # Summary statistics
-        cv_total_time = time.time() - cv_start_time
-
         logger.info("\n" + "="*70)
         logger.info("[Cross-Validation Summary]")
         logger.info("="*70)
@@ -778,8 +722,6 @@ class NeuralTrainer:
 
         logger.info(f"  Average Validation Loss: {avg_val_loss:.4f} ± {std_val_loss:.4f}")
         logger.info(f"  Average Validation Accuracy: {avg_val_acc:.2f}% ± {std_val_acc:.2f}%")
-        logger.info(f"  ⏱ Total CV Time: {format_time(cv_total_time)}")
-        log_memory_usage("after cross-validation")
         logger.info("\n  Per-Fold Results:")
         for result in fold_results:
             logger.info(f"    Fold {result['fold']}: Loss={result['val_loss']:.4f}, Acc={result['val_accuracy']:.2f}%")
@@ -825,71 +767,57 @@ class ModelTrainer:
 
     def train(self):
         """Execute full training pipeline"""
-        pipeline_start_time = time.time()
-
         logger.info("="*70)
         logger.info("🚀 ACTIVITY PLANNER - MODEL TRAINING PIPELINE")
         logger.info("="*70)
         logger.info(f"Started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        log_memory_usage("start")
 
         # Step 1: Load and process data
-        logger.info("\n[1/8] Loading dataset...")
-        step_start = time.time()
+        logger.info("\n[1/5] Loading dataset...")
         self.df_activities = self.data_processor.load_dataset()
-        logger.info(f"  ⏱ Step completed in {format_time(time.time() - step_start)}")
-        log_memory_usage()
 
-        logger.info("\n[2/8] Creating text representations...")
-        step_start = time.time()
+        logger.info("\n[2/5] Creating text representations...")
         self.activity_texts = self.data_processor.create_text_representations()
-        logger.info(f"  ⏱ Step completed in {format_time(time.time() - step_start)}")
-        log_memory_usage()
 
         # Step 2: Build BM25 index
-        logger.info("\n[3/8] Building BM25 keyword index...")
-        step_start = time.time()
+        logger.info("\n[3/5] Building BM25 keyword index...")
         self.bm25_indexer.build_index(self.activity_texts)
         self.bm25_indexer.save(self.config.output_dir)
-        logger.info(f"  ⏱ Step completed in {format_time(time.time() - step_start)}")
-        log_memory_usage()
 
         # Step 3: Generate embeddings and build FAISS
-        logger.info("\n[4/8] Generating Sentence-BERT embeddings...")
-        step_start = time.time()
+        logger.info("\n[4/5] Generating Sentence-BERT embeddings...")
         self.dense_embedder.load_model()
         self.dense_embedder.generate_embeddings(self.activity_texts)
         self.dense_embedder.build_faiss_index()
         self.dense_embedder.save(self.config.output_dir)
-        logger.info(f"  ⏱ Step completed in {format_time(time.time() - step_start)}")
-        log_memory_usage()
 
         # Step 4: Save dataset and config
-        logger.info("\n[5/8] Saving dataset and configuration...")
-        step_start = time.time()
+        logger.info("\n[5/7] Saving dataset and configuration...")
         self._save_dataset()
         self.config.save(os.path.join(self.config.output_dir, 'training_config.json'))
-        logger.info(f"  ⏱ Step completed in {format_time(time.time() - step_start)}")
 
         # Step 5: Perform K-fold cross-validation for model evaluation
         logger.info("\n[6/8] Running K-fold cross-validation...")
-        step_start = time.time()
 
         # Create labels for cross-validation
         labels = []
         for idx, row in self.df_activities.iterrows():
             age_min = row['age_min']
-            age_max = row['age_max']
-            age_mid = (age_min + age_max) / 2
 
-            if age_mid <= 3.5:
+            if age_min <= 3:
                 labels.append(0)  # Toddler
-            elif age_mid <= 7:
+            elif age_min <= 6:
                 labels.append(1)  # Preschool
-            elif age_mid <= 11:
+            elif age_min <= 10:
                 labels.append(2)  # Elementary
+            elif age_min <= 17:
+                labels.append(3)  # Teen
+            elif age_min <= 39:
+                labels.append(4)  # Young Adult
+            elif age_min <= 64:
+                labels.append(5)  # Adult
             else:
-                labels.append(3)  # Teen+
+                labels.append(6)  # Senior
 
         labels = np.array(labels)
 
@@ -897,39 +825,29 @@ class ModelTrainer:
         cv_results, avg_cv_loss, avg_cv_acc = self.neural_trainer.cross_validate(
             self.dense_embedder.embeddings,
             labels,
-            k_folds=5,
-            num_epochs=50,
-            learning_rate=0.001
+            k_folds=10,
+            num_epochs=100,
+            learning_rate=0.0005
         )
-        logger.info(f"  ⏱ Cross-validation completed in {format_time(time.time() - step_start)}")
 
         # Step 6: Train final neural network on full train/val/test split
         logger.info("\n[7/8] Training final neural network classifier...")
-        step_start = time.time()
         num_classes = self.neural_trainer.prepare_data(self.dense_embedder.embeddings, self.df_activities)
         self.neural_trainer.build_model(
             input_dim=self.dense_embedder.embeddings.shape[1],
             num_classes=num_classes
         )
-        test_loss, test_acc = self.neural_trainer.train(num_epochs=50, learning_rate=0.001, patience=10)
+        test_loss, test_acc = self.neural_trainer.train(num_epochs=100, learning_rate=0.0005, patience=20)
         self.neural_trainer.save(self.config.output_dir)
-        logger.info(f"  ⏱ Final training completed in {format_time(time.time() - step_start)}")
-        log_memory_usage()
 
         # Step 7: Test pipeline
         logger.info("\n[8/8] Testing hybrid retrieval pipeline...")
-        step_start = time.time()
         self._test_pipeline()
-        logger.info(f"  ⏱ Step completed in {format_time(time.time() - step_start)}")
-
-        pipeline_total_time = time.time() - pipeline_start_time
 
         logger.info("\n" + "="*70)
         logger.info("✅ MODEL TRAINING COMPLETE!")
         logger.info("="*70)
         logger.info(f"Completed at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        logger.info(f"⏱ Total Pipeline Time: {format_time(pipeline_total_time)}")
-        log_memory_usage("final")
         logger.info(f"\nModels saved in: {self.config.output_dir}/")
         logger.info("\nGenerated files:")
         logger.info("  ✓ bm25_docs.pkl - BM25 keyword index")
