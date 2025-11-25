@@ -198,12 +198,12 @@ class ModelTester:
             y_test, y_pred, average='weighted', zero_division=0
         )
 
-        # Confusion matrix
-        cm = confusion_matrix(y_test, y_pred)
+        # Confusion matrix (ensure all 7 classes are included)
+        cm = confusion_matrix(y_test, y_pred, labels=np.arange(7))
 
-        # Per-class metrics
+        # Per-class metrics (ensure all 7 classes are included)
         per_class_metrics = precision_recall_fscore_support(
-            y_test, y_pred, average=None, zero_division=0
+            y_test, y_pred, average=None, zero_division=0, labels=np.arange(7)
         )
 
         results = {
@@ -318,12 +318,12 @@ class ModelTester:
             y_test, y_pred, average='weighted', zero_division=0
         )
 
-        # Confusion matrix
-        cm = confusion_matrix(y_test, y_pred)
+        # Confusion matrix (ensure all 7 classes are included)
+        cm = confusion_matrix(y_test, y_pred, labels=np.arange(7))
 
-        # Per-class metrics
+        # Per-class metrics (ensure all 7 classes are included)
         per_class_metrics = precision_recall_fscore_support(
-            y_test, y_pred, average=None, zero_division=0
+            y_test, y_pred, average=None, zero_division=0, labels=np.arange(7)
         )
 
         # Get model info
