@@ -1,5 +1,7 @@
 # 🎯 Activity Planner - AI-Powered Family Activity Search
 
+Activity Planner is a machine learning-powered system that helps families discover age-appropriate activities through intelligent classification and semantic search. The project combines a neural network classifier (with Random Forest baseline) that categorizes activities into age groups (Toddler, Preschool, Elementary, Teen+) with a sophisticated recommendation engine using Sentence-BERT embeddings, hybrid search (BM25 + dense retrieval), and group-aware linkage scoring to match activities with family member profiles and preferences.
+
 ## Overview
 
 Activity Planner is an intelligent recommendation system that uses **Sentence-BERT embeddings** and **hybrid search** to help families find perfect activities based on group member profiles and preferences.
