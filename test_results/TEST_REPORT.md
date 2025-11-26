@@ -1,6 +1,6 @@
 # Model Testing Report
 
-**Test Date:** 2025-11-25T16:29:32.885328
+**Test Date:** 2025-11-26T16:42:21.927377
 
 ---
 
@@ -24,38 +24,35 @@ Random Forest was chosen as the baseline because:
 
 ### Quantitative Results
 
-- **Accuracy:** 0.4444
-- **Precision:** 0.4375
-- **Recall:** 0.4444
-- **F1 Score:** 0.4215
+- **Accuracy:** 0.6772
+- **Precision:** 0.6553
+- **Recall:** 0.6772
+- **F1 Score:** 0.6017
 
 ### Per-Class Performance
 
 | Age Group | Precision | Recall | F1 Score |
 |-----------|-----------|--------|----------|
-| Toddler (0-3) | 0.7778 | 0.3043 | 0.4375 |
-| Preschool (4-6) | 0.4694 | 0.4894 | 0.4792 |
-| Elementary (7-10) | 0.3590 | 0.5833 | 0.4444 |
-| Teen (11-17) | 0.4906 | 0.5000 | 0.4952 |
-| Young Adult (18-39) | 0.0000 | 0.0000 | 0.0000 |
-| Adult (40-64) | 0.0000 | 0.0000 | 0.0000 |
-| Senior (65+) | 0.0000 | 0.0000 | 0.0000 |
+| Toddler (0-3) | 1.0000 | 0.1818 | 0.3077 |
+| Preschool (4-6) | 0.5000 | 0.0417 | 0.0769 |
+| Elementary (7-10) | 0.5455 | 0.3000 | 0.3871 |
+| Teen+ (11+) | 0.6933 | 0.9912 | 0.8159 |
 
 ## Primary Model: Neural Network
 
 ### Architecture
 
 - **Model Type:** Multi-layer Neural Network
-- **Architecture:** 384 → 256 → 128 → 7
-- **Total Parameters:** 133,127
-- **Trainable Parameters:** 133,127
+- **Architecture:** 384 → 128 → 64 → 4
+- **Total Parameters:** 58,180
+- **Trainable Parameters:** 58,180
 
 **Layer Details:**
 
 - Input: 384 (Sentence-BERT embeddings)
-- Hidden 1: Linear(384, 256) + BatchNorm + ReLU + Dropout(0.5)
-- Hidden 2: Linear(256, 128) + BatchNorm + ReLU + Dropout(0.5)
-- Output: Linear(128, 7)
+- Hidden 1: Linear(384, 128) + BatchNorm + ReLU + Dropout(0.5)
+- Hidden 2: Linear(128, 64) + BatchNorm + ReLU + Dropout(0.5)
+- Output: Linear(64, 4)
 
 **Training Configuration:**
 
@@ -67,46 +64,44 @@ Random Forest was chosen as the baseline because:
 
 The multi-layer neural network architecture was chosen because:
 - Can learn complex non-linear patterns in the embedding space
-- Progressive dimensionality reduction (384→256→128→7) allows hierarchical feature learning
+- Progressive dimensionality reduction (384→128→64→4) allows hierarchical feature learning
+- Reduced architecture (60% fewer parameters than 384→256→128→4) prevents overfitting on small dataset
 - BatchNorm and Dropout provide regularization to prevent overfitting
 - Well-suited for high-dimensional embedding inputs
 
 ### Quantitative Results
 
-- **Accuracy:** 0.7725
-- **Precision:** 0.7785
-- **Recall:** 0.7725
-- **F1 Score:** 0.7731
+- **Accuracy:** 0.9312
+- **Precision:** 0.9365
+- **Recall:** 0.9312
+- **F1 Score:** 0.9317
 
 ### Per-Class Performance
 
 | Age Group | Precision | Recall | F1 Score |
 |-----------|-----------|--------|----------|
-| Toddler (0-3) | 0.7407 | 0.8696 | 0.8000 |
-| Preschool (4-6) | 0.7500 | 0.7021 | 0.7253 |
-| Elementary (7-10) | 0.7347 | 0.7500 | 0.7423 |
-| Teen (11-17) | 0.8913 | 0.7885 | 0.8367 |
-| Young Adult (18-39) | 0.7222 | 0.8667 | 0.7879 |
-| Adult (40-64) | 0.6000 | 0.7500 | 0.6667 |
-| Senior (65+) | 0.0000 | 0.0000 | 0.0000 |
+| Toddler (0-3) | 0.7333 | 1.0000 | 0.8462 |
+| Preschool (4-6) | 0.9500 | 0.7917 | 0.8636 |
+| Elementary (7-10) | 0.8537 | 0.8750 | 0.8642 |
+| Teen+ (11+) | 0.9823 | 0.9737 | 0.9780 |
 
 ## Model Comparison
 
-- **Accuracy Improvement:** 0.3280 (+32.80%)
-- **F1 Score Improvement:** 0.3515 (+35.15%)
+- **Accuracy Improvement:** 0.2540 (+25.40%)
+- **F1 Score Improvement:** 0.3300 (+33.00%)
 - **Better Performing Model:** Primary
 
 ## Qualitative Analysis
 
 ### Prediction Categories
 
-**Both Correct:** 75 samples
+**Both Correct:** 124 samples
 
-**Both Wrong:** 34 samples
+**Both Wrong:** 9 samples
 
-**Baseline Correct, Primary Wrong:** 9 samples
+**Baseline Correct, Primary Wrong:** 4 samples
 
-**Primary Correct, Baseline Wrong:** 71 samples
+**Primary Correct, Baseline Wrong:** 52 samples
 
 ## Visualizations
 
