@@ -26,6 +26,7 @@ from sentence_transformers import SentenceTransformer
 import faiss
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.model_selection import train_test_split, KFold
+from imblearn.over_sampling import SMOTE
 from tqdm import tqdm
 import torch
 import torch.nn as nn
@@ -361,6 +362,62 @@ class NeuralTrainer:
         self.val_losses = []
         logger.info(f"Neural trainer initialized on device: {self.device}")
 
+    def balance_with_smote(self, X: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """Balance dataset using SMOTE to address class imbalance
+
+        Args:
+            X: Feature embeddings
+            y: Labels
+
+        Returns:
+            Tuple of balanced (X, y)
+        """
+        logger.info("\n[Data Balancing] Applying SMOTE to address class imbalance...")
+
+        # Show original distribution
+        unique, counts = np.unique(y, return_counts=True)
+        label_names = ['Toddler (0-3)', 'Preschool (4-6)', 'Elementary (7-10)', 'Teen+ (11+)']
+
+        logger.info("  Original distribution:")
+        for label, count in zip(unique, counts):
+            logger.info(f"    {label_names[label]}: {count} ({count/len(y)*100:.1f}%)")
+
+        # Determine k_neighbors based on smallest class
+        min_samples = min(counts)
+        k_neighbors = min(5, min_samples - 1)  # Ensure we don't exceed available neighbors
+
+        if k_neighbors < 1:
+            logger.warning(f"  ⚠ Smallest class has only {min_samples} samples. SMOTE requires at least 2.")
+            logger.warning("  Skipping SMOTE balancing. Consider collecting more data.")
+            return X, y
+
+        logger.info(f"  Using k_neighbors={k_neighbors} (based on smallest class size: {min_samples})")
+
+        try:
+            # Apply SMOTE with automatic balancing
+            smote = SMOTE(
+                sampling_strategy='auto',  # Balance all minority classes to match majority
+                random_state=42,
+                k_neighbors=k_neighbors
+            )
+            X_balanced, y_balanced = smote.fit_resample(X, y)
+
+            # Show new distribution
+            unique, counts = np.unique(y_balanced, return_counts=True)
+            logger.info("\n  After SMOTE:")
+            for label, count in zip(unique, counts):
+                logger.info(f"    {label_names[label]}: {count} ({count/len(y_balanced)*100:.1f}%)")
+
+            logger.info(f"\n✓ SMOTE complete: {len(y)} → {len(y_balanced)} samples")
+            logger.info(f"  Increase: +{len(y_balanced) - len(y)} synthetic samples ({(len(y_balanced)/len(y) - 1)*100:.1f}%)\n")
+
+            return X_balanced, y_balanced
+
+        except Exception as e:
+            logger.error(f"  ✗ SMOTE failed: {e}")
+            logger.warning("  Continuing with original unbalanced data")
+            return X, y
+
     def prepare_data(self, embeddings: np.ndarray, df_activities: pd.DataFrame):
         """Split data into train/validation/test sets with balanced age group distribution"""
         logger.info("\n[Neural Network] Preparing train/validation/test split with balanced distribution...")
@@ -404,6 +461,10 @@ class NeuralTrainer:
             X_temp, y_temp, test_size=0.111, random_state=42, stratify=y_temp  # 0.111 * 0.90 ≈ 0.10
         )
 
+        # Apply SMOTE to training set only to balance classes
+        # This prevents data leakage from validation/test sets
+        X_train, y_train = self.balance_with_smote(X_train, y_train)
+
         # Display distribution in each split
         logger.info(f"\n✓ Train set: {len(X_train)} samples ({len(X_train)/len(embeddings)*100:.1f}%)")
         unique, counts = np.unique(y_train, return_counts=True)
@@ -445,10 +506,10 @@ class NeuralTrainer:
         logger.info(f"  Input dimension: {input_dim}")
         logger.info(f"  Number of classes: {num_classes}")
 
-        # Simplified architecture for small dataset (1800 samples)
-        # Using 2 hidden layers with moderate dropout and L2 regularization
-        hidden_dims = [128, 64]  # Reduced from [256, 128] - 60% fewer parameters
-        dropout_rate = 0.3       # Reduced from 0.5 - less aggressive regularization
+        # Improved architecture for SMOTE-balanced dataset
+        # Using 3 hidden layers with reduced dropout for better learning
+        hidden_dims = [256, 128, 64]  # Increased capacity for balanced data
+        dropout_rate = 0.2       # Reduced from 0.3 for better minority class learning
         self.model = ActivityClassifier(input_dim, hidden_dims, num_classes, dropout=dropout_rate)
         self.model.to(self.device)
 
@@ -458,9 +519,9 @@ class NeuralTrainer:
 
         logger.info(f"✓ Model built with {trainable_params:,} trainable parameters")
         logger.info(f"  Architecture: {input_dim} -> {' -> '.join(map(str, hidden_dims))} -> {num_classes}")
-        logger.info(f"  Dropout: Base {dropout_rate} (consistent: 0.15 input -> 0.3 hidden layers)")
-        logger.info(f"  Regularization: L2 weight decay (5e-5), soft class weighting, early stopping")
-        logger.info(f"  Optimized for small dataset (1800 samples)")
+        logger.info(f"  Dropout: {dropout_rate} (input: {dropout_rate * 0.5}, hidden: {dropout_rate})")
+        logger.info(f"  Regularization: L2 weight decay (5e-5), inverse frequency class weighting, early stopping")
+        logger.info(f"  Optimized for SMOTE-balanced dataset with improved capacity")
 
     def train_epoch(self, optimizer, criterion, epoch: int, num_epochs: int):
         """Train for one epoch with batch-wise loss display"""
@@ -559,13 +620,14 @@ class NeuralTrainer:
         log_memory_usage("before training")
         logger.info("="*70)
 
-        # Use softer class weights for small dataset (sqrt instead of inverse)
-        # This prevents over-focusing on minority classes
-        class_weights = 1.0 / torch.sqrt(torch.tensor(self.class_counts, dtype=torch.float32))
+        # Use stronger class weights with SMOTE-balanced data
+        # With SMOTE balancing training data, we still weight by original class counts
+        # to ensure the model respects true class importance
+        class_weights = 1.0 / torch.tensor(self.class_counts, dtype=torch.float32)
         class_weights = class_weights / class_weights.sum() * self.num_classes  # Normalize
         class_weights = class_weights.to(self.device)
 
-        logger.info(f"\n  Class Weights (softened for small dataset):")
+        logger.info(f"\n  Class Weights (inverse frequency for SMOTE-balanced data):")
         label_names = ['Toddler (0-3)', 'Preschool (4-6)', 'Elementary (7-10)', 'Teen+ (11+)']
         for i, weight in enumerate(class_weights):
             logger.info(f"    {label_names[i]}: {weight:.4f}")
@@ -666,17 +728,17 @@ class NeuralTrainer:
             train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
             val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
 
-            # Rebuild model for this fold (using optimized architecture)
+            # Rebuild model for this fold (using updated architecture)
             num_classes = len(np.unique(labels))
             input_dim = embeddings.shape[1]
-            hidden_dims = [128, 64]  # Match main training architecture
+            hidden_dims = [256, 128, 64]  # Match main training architecture
 
-            model = ActivityClassifier(input_dim, hidden_dims, num_classes, dropout=0.3)
+            model = ActivityClassifier(input_dim, hidden_dims, num_classes, dropout=0.2)
             model.to(self.device)
 
-            # Calculate softer class weights for this fold
+            # Calculate stronger class weights for this fold (inverse frequency)
             unique, counts = np.unique(y_train_fold, return_counts=True)
-            class_weights = 1.0 / torch.sqrt(torch.tensor(counts, dtype=torch.float32))
+            class_weights = 1.0 / torch.tensor(counts, dtype=torch.float32)
             class_weights = class_weights / class_weights.sum() * num_classes
             class_weights = class_weights.to(self.device)
 
