@@ -326,17 +326,16 @@ class ActivityClassifier(nn.Module):
         layers = []
         prev_dim = input_dim
 
-        # Input dropout for robustness
-        layers.append(nn.Dropout(dropout * 0.6))  # Lighter dropout at input
+        # Input dropout for robustness (moderate for small dataset)
+        layers.append(nn.Dropout(dropout * 0.5))  # 0.15 with dropout=0.3
 
         # Build hidden layers with aggressive dropout
         for i, hidden_dim in enumerate(hidden_dims):
             layers.append(nn.Linear(prev_dim, hidden_dim))
             layers.append(nn.ReLU())
             layers.append(nn.BatchNorm1d(hidden_dim))
-            # Increase dropout progressively in deeper layers
-            layer_dropout = dropout + (i * 0.05)
-            layers.append(nn.Dropout(min(layer_dropout, 0.7)))  # Cap at 0.7
+            # Consistent dropout across layers for small dataset
+            layers.append(nn.Dropout(dropout))  # Consistent 0.3 dropout
             prev_dim = hidden_dim
 
         # Output layer
@@ -446,10 +445,10 @@ class NeuralTrainer:
         logger.info(f"  Input dimension: {input_dim}")
         logger.info(f"  Number of classes: {num_classes}")
 
-        # Simplified architecture to reduce overfitting
-        # Using 2 hidden layers with aggressive dropout and L2 regularization
-        hidden_dims = [256, 128]
-        dropout_rate = 0.5
+        # Simplified architecture for small dataset (1800 samples)
+        # Using 2 hidden layers with moderate dropout and L2 regularization
+        hidden_dims = [128, 64]  # Reduced from [256, 128] - 60% fewer parameters
+        dropout_rate = 0.3       # Reduced from 0.5 - less aggressive regularization
         self.model = ActivityClassifier(input_dim, hidden_dims, num_classes, dropout=dropout_rate)
         self.model.to(self.device)
 
@@ -459,8 +458,9 @@ class NeuralTrainer:
 
         logger.info(f"✓ Model built with {trainable_params:,} trainable parameters")
         logger.info(f"  Architecture: {input_dim} -> {' -> '.join(map(str, hidden_dims))} -> {num_classes}")
-        logger.info(f"  Dropout: Base {dropout_rate} (progressive: 0.3 input -> 0.5 -> 0.55 -> output)")
-        logger.info(f"  Regularization: L2 weight decay, class weighting, early stopping")
+        logger.info(f"  Dropout: Base {dropout_rate} (consistent: 0.15 input -> 0.3 hidden layers)")
+        logger.info(f"  Regularization: L2 weight decay (5e-5), soft class weighting, early stopping")
+        logger.info(f"  Optimized for small dataset (1800 samples)")
 
     def train_epoch(self, optimizer, criterion, epoch: int, num_epochs: int):
         """Train for one epoch with batch-wise loss display"""
@@ -547,32 +547,32 @@ class NeuralTrainer:
 
         return avg_test_loss, accuracy
 
-    def train(self, num_epochs: int = 50, learning_rate: float = 0.001, patience: int = 10):
+    def train(self, num_epochs: int = 100, learning_rate: float = 0.001, patience: int = 15):
         """Full training loop with train/validation/test evaluation and early stopping"""
         train_start_time = time.time()
 
         logger.info(f"\n[Neural Network] Starting training for {num_epochs} epochs...")
         logger.info(f"  Learning rate: {learning_rate}")
-        logger.info(f"  L2 Regularization (weight_decay): 1e-4 (increased from 1e-5)")
+        logger.info(f"  L2 Regularization (weight_decay): 5e-5 (optimized for small dataset)")
         logger.info(f"  Early stopping patience: {patience} epochs")
         logger.info(f"  Device: {self.device}")
         log_memory_usage("before training")
         logger.info("="*70)
 
-        # Calculate class weights inversely proportional to frequency
-        # This helps the model pay more attention to minority classes
-        class_weights = 1.0 / torch.tensor(self.class_counts, dtype=torch.float32)
+        # Use softer class weights for small dataset (sqrt instead of inverse)
+        # This prevents over-focusing on minority classes
+        class_weights = 1.0 / torch.sqrt(torch.tensor(self.class_counts, dtype=torch.float32))
         class_weights = class_weights / class_weights.sum() * self.num_classes  # Normalize
         class_weights = class_weights.to(self.device)
 
-        logger.info(f"\n  Class Weights (to address imbalance):")
+        logger.info(f"\n  Class Weights (softened for small dataset):")
         label_names = ['Toddler (0-3)', 'Preschool (4-6)', 'Elementary (7-10)', 'Teen+ (11+)']
         for i, weight in enumerate(class_weights):
             logger.info(f"    {label_names[i]}: {weight:.4f}")
 
         criterion = nn.CrossEntropyLoss(weight=class_weights)
-        # Increased weight_decay from 1e-5 to 1e-4 for stronger L2 regularization
-        optimizer = optim.Adam(self.model.parameters(), lr=learning_rate, weight_decay=1e-4)
+        # Moderate weight_decay optimized for small dataset (1800 samples)
+        optimizer = optim.Adam(self.model.parameters(), lr=learning_rate, weight_decay=5e-5)
 
         best_val_loss = float('inf')
         best_model_state = None
@@ -630,7 +630,7 @@ class NeuralTrainer:
         return test_loss, test_acc
 
     def cross_validate(self, embeddings: np.ndarray, labels: np.ndarray, k_folds: int = 5,
-                      num_epochs: int = 50, learning_rate: float = 0.001):
+                      num_epochs: int = 100, learning_rate: float = 0.001):
         """Perform K-fold cross-validation to evaluate model generalization"""
         logger.info(f"\n[K-Fold Cross-Validation] Starting {k_folds}-fold cross-validation...")
         logger.info(f"  Dataset size: {len(embeddings)}")
@@ -666,22 +666,22 @@ class NeuralTrainer:
             train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
             val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
 
-            # Rebuild model for this fold
+            # Rebuild model for this fold (using optimized architecture)
             num_classes = len(np.unique(labels))
             input_dim = embeddings.shape[1]
-            hidden_dims = [256, 128]
+            hidden_dims = [128, 64]  # Match main training architecture
 
-            model = ActivityClassifier(input_dim, hidden_dims, num_classes, dropout=0.5)
+            model = ActivityClassifier(input_dim, hidden_dims, num_classes, dropout=0.3)
             model.to(self.device)
 
-            # Calculate class weights for this fold
+            # Calculate softer class weights for this fold
             unique, counts = np.unique(y_train_fold, return_counts=True)
-            class_weights = 1.0 / torch.tensor(counts, dtype=torch.float32)
+            class_weights = 1.0 / torch.sqrt(torch.tensor(counts, dtype=torch.float32))
             class_weights = class_weights / class_weights.sum() * num_classes
             class_weights = class_weights.to(self.device)
 
             criterion = nn.CrossEntropyLoss(weight=class_weights)
-            optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)
+            optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=5e-5)
 
             # Train this fold with early stopping
             best_val_loss = float('inf')
@@ -898,7 +898,7 @@ class ModelTrainer:
             self.dense_embedder.embeddings,
             labels,
             k_folds=5,
-            num_epochs=50,
+            num_epochs=100,
             learning_rate=0.001
         )
         logger.info(f"  ⏱ Cross-validation completed in {format_time(time.time() - step_start)}")
@@ -911,7 +911,7 @@ class ModelTrainer:
             input_dim=self.dense_embedder.embeddings.shape[1],
             num_classes=num_classes
         )
-        test_loss, test_acc = self.neural_trainer.train(num_epochs=50, learning_rate=0.001, patience=10)
+        test_loss, test_acc = self.neural_trainer.train(num_epochs=100, learning_rate=0.001, patience=15)
         self.neural_trainer.save(self.config.output_dir)
         logger.info(f"  ⏱ Final training completed in {format_time(time.time() - step_start)}")
         log_memory_usage()
