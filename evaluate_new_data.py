@@ -53,23 +53,22 @@ class NeuralClassifier(nn.Module):
     with input dropout and progressive dropout in deeper layers.
     """
 
-    def __init__(self, input_dim=384, hidden_dims=[256, 128], num_classes=4, dropout=0.5):
+    def __init__(self, input_dim=384, hidden_dims=[128, 64], num_classes=4, dropout=0.3):
         super(NeuralClassifier, self).__init__()
 
         layers = []
         prev_dim = input_dim
 
         # Input dropout for robustness (matches training architecture)
-        layers.append(nn.Dropout(dropout * 0.6))  # Lighter dropout at input
+        layers.append(nn.Dropout(dropout * 0.5))  # Lighter dropout at input
 
-        # Build hidden layers with progressive dropout
+        # Build hidden layers with consistent dropout
         for i, hidden_dim in enumerate(hidden_dims):
             layers.append(nn.Linear(prev_dim, hidden_dim))
             layers.append(nn.ReLU())
             layers.append(nn.BatchNorm1d(hidden_dim))
-            # Increase dropout progressively in deeper layers
-            layer_dropout = dropout + (i * 0.05)
-            layers.append(nn.Dropout(min(layer_dropout, 0.7)))  # Cap at 0.7
+            # Consistent dropout across layers for small dataset
+            layers.append(nn.Dropout(dropout))  # Consistent dropout
             prev_dim = hidden_dim
 
         # Output layer
@@ -174,18 +173,18 @@ class NewDataEvaluator:
             # Initialize model with same architecture as the checkpoint
             model = NeuralClassifier(
                 input_dim=384,
-                hidden_dims=[256, 128],
+                hidden_dims=[128, 64],
                 num_classes=num_classes_in_checkpoint,
-                dropout=0.5
+                dropout=0.3
             )
         else:
             # Fallback: use expected architecture
             logger.warning("Could not detect architecture from checkpoint, using default (4 classes)")
             model = NeuralClassifier(
                 input_dim=384,
-                hidden_dims=[256, 128],
+                hidden_dims=[128, 64],
                 num_classes=4,
-                dropout=0.5
+                dropout=0.3
             )
 
         # Load state dict into model
