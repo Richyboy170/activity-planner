@@ -240,7 +240,7 @@ class ModelTester:
         print("="*60)
 
         # Model architecture (must match training)
-        hidden_dims = [256, 128]
+        hidden_dims = [128, 64]  # Reduced architecture for small dataset
 
         # Check if model exists
         model_path = Path(model_path)
@@ -327,7 +327,7 @@ class ModelTester:
 
         # Get the actual number of output classes from the model
         num_output_classes = list(model.parameters())[-1].shape[0]
-        architecture_str = f"384 → 256 → 128 → {num_output_classes}"
+        architecture_str = f"384 → 128 → 64 → {num_output_classes}"
 
         results = {
             "model_info": {
@@ -335,9 +335,9 @@ class ModelTester:
                 "architecture": architecture_str,
                 "layers": [
                     "Input: 384 (Sentence-BERT embeddings)",
-                    "Hidden 1: Linear(384, 256) + BatchNorm + ReLU + Dropout(0.5)",
-                    "Hidden 2: Linear(256, 128) + BatchNorm + ReLU + Dropout(0.5)",
-                    f"Output: Linear(128, {num_output_classes})"
+                    "Hidden 1: Linear(384, 128) + BatchNorm + ReLU + Dropout(0.5)",
+                    "Hidden 2: Linear(128, 64) + BatchNorm + ReLU + Dropout(0.5)",
+                    f"Output: Linear(64, {num_output_classes})"
                 ],
                 "total_parameters": total_params,
                 "trainable_parameters": trainable_params,
@@ -378,7 +378,7 @@ class ModelTester:
         print(f"Using device: {device}")
 
         # Model architecture (must match training)
-        hidden_dims = [256, 128]
+        hidden_dims = [128, 64]  # Reduced architecture for small dataset
 
         # Create model
         model = ActivityClassifier(input_dim=384, hidden_dims=hidden_dims, num_classes=4).to(device)
@@ -844,7 +844,8 @@ class ModelTester:
             f.write("### Rationale\n\n")
             f.write("The multi-layer neural network architecture was chosen because:\n")
             f.write("- Can learn complex non-linear patterns in the embedding space\n")
-            f.write("- Progressive dimensionality reduction (384→256→128→7) allows hierarchical feature learning\n")
+            f.write("- Progressive dimensionality reduction (384→128→64→4) allows hierarchical feature learning\n")
+            f.write("- Reduced architecture (60% fewer parameters than 384→256→128→4) prevents overfitting on small dataset\n")
             f.write("- BatchNorm and Dropout provide regularization to prevent overfitting\n")
             f.write("- Well-suited for high-dimensional embedding inputs\n\n")
 
