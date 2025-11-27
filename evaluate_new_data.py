@@ -108,6 +108,9 @@ class NewDataEvaluator:
         self.baseline_metrics = self._load_baseline_metrics()
         self.rf_baseline_metrics = self._load_rf_baseline_metrics()
 
+        # Load normalization parameters from training data
+        self.normalization_params = self._load_normalization_params()
+
         # Age group mapping
         self.age_groups = {
             0: 'Toddler (0-3)',
@@ -270,6 +273,72 @@ class NewDataEvaluator:
                 return report.get('baseline_model', {})
         return {}
 
+    def _load_normalization_params(self) -> Dict:
+        """
+        Load normalization parameters from training dataset.
+
+        These parameters (min, max for each feature) are needed to normalize
+        new data the same way training data was normalized.
+
+        Returns:
+            Dictionary with min/max values for each numerical feature
+        """
+        logger.info("Loading normalization parameters from training dataset...")
+
+        # Try to load from saved file first
+        norm_params_path = self.model_dir / 'normalization_params.json'
+        if norm_params_path.exists():
+            with open(norm_params_path, 'r') as f:
+                params = json.load(f)
+                logger.info("Loaded normalization parameters from saved file")
+                return params
+
+        # Otherwise, compute from the processed training dataset
+        train_data_path = self.model_dir / 'activities_processed.csv'
+        if not train_data_path.exists():
+            logger.warning("Training dataset not found. Using default normalization (0-1 range).")
+            # Return default parameters that won't change the values much
+            return {
+                'age_min': {'min': 0, 'max': 18},
+                'age_max': {'min': 0, 'max': 18},
+                'duration_mins': {'min': 0, 'max': 120}
+            }
+
+        # Load training data to compute normalization parameters
+        df_train = pd.read_csv(train_data_path)
+        logger.info(f"Computing normalization parameters from {len(df_train)} training samples...")
+
+        # Extract features from training data
+        features = {
+            'age_min': [],
+            'age_max': [],
+            'duration_mins': []
+        }
+
+        for _, row in df_train.iterrows():
+            for feat in features.keys():
+                val = row.get(feat, 0)
+                if pd.isna(val):
+                    val = 0
+                features[feat].append(val)
+
+        # Compute min and max for each feature
+        params = {}
+        for feat, values in features.items():
+            arr = np.array(values)
+            params[feat] = {
+                'min': float(arr.min()),
+                'max': float(arr.max())
+            }
+            logger.info(f"  {feat}: min={params[feat]['min']:.2f}, max={params[feat]['max']:.2f}")
+
+        # Save for future use
+        with open(norm_params_path, 'w') as f:
+            json.dump(params, f, indent=2)
+        logger.info(f"Saved normalization parameters to {norm_params_path}")
+
+        return params
+
     def load_new_data(self, csv_path: str, data_source_description: str) -> Tuple[List[str], np.ndarray, pd.DataFrame]:
         """
         Load new data from CSV file.
@@ -297,27 +366,23 @@ class NewDataEvaluator:
         if missing_cols:
             raise ValueError(f"Missing required columns: {missing_cols}")
 
-        # Create activity representations (same as training)
+        # Create activity representations (MUST match training exactly)
+        # Training uses: title (3x), tags (2x), how_to_play (2x) - ONLY these 3 fields
         activity_texts = []
         for _, row in df.iterrows():
             text_parts = []
 
-            # Title (3x weight)
+            # Title (3x weight) - most important
             if pd.notna(row.get('title')):
                 text_parts.extend([str(row['title'])] * 3)
 
-            # Tags (2x weight)
+            # Tags (2x weight) - high importance
             if pd.notna(row.get('tags')):
                 text_parts.extend([str(row['tags'])] * 2)
 
-            # Description
-            if pd.notna(row.get('description')):
-                text_parts.append(str(row['description']))
-
-            # Other fields (1x weight each)
-            for field in ['cost', 'indoor_outdoor', 'season', 'players']:
-                if field in df.columns and pd.notna(row.get(field)):
-                    text_parts.append(f"{field}: {row[field]}")
+            # how_to_play (2x weight) - high importance
+            if pd.notna(row.get('how_to_play')):
+                text_parts.extend([str(row['how_to_play'])] * 2)
 
             activity_texts.append(' '.join(text_parts))
 
@@ -349,17 +414,22 @@ class NewDataEvaluator:
 
     def extract_numerical_features(self, df: pd.DataFrame) -> np.ndarray:
         """
-        Extract numerical features: age_min, age_max, duration_mins.
+        Extract and normalize numerical features: age_min, age_max, duration_mins.
+
+        CRITICAL: Features must be normalized using the SAME parameters as training.
+        This ensures the model receives inputs in the same scale it was trained on.
 
         Args:
             df: DataFrame containing the data
 
         Returns:
-            Array of numerical features with shape (n_samples, 3)
+            Array of normalized numerical features with shape (n_samples, 3)
         """
         logger.info("Extracting numerical features (age_min, age_max, duration_mins)...")
 
         numerical_features = []
+        feature_names = ['age_min', 'age_max', 'duration_mins']
+
         for idx, row in df.iterrows():
             age_min = row.get('age_min', 0)
             age_max = row.get('age_max', 0)
@@ -376,7 +446,22 @@ class NewDataEvaluator:
             numerical_features.append([age_min, age_max, duration_mins])
 
         numerical_features = np.array(numerical_features, dtype=np.float32)
-        logger.info(f"Extracted numerical features with shape: {numerical_features.shape}")
+
+        # CRITICAL: Normalize using the SAME parameters as training
+        logger.info("Normalizing features using training parameters...")
+        for i, feat_name in enumerate(feature_names):
+            col = numerical_features[:, i]
+            col_min = self.normalization_params[feat_name]['min']
+            col_max = self.normalization_params[feat_name]['max']
+
+            if col_max > col_min:
+                numerical_features[:, i] = (col - col_min) / (col_max - col_min)
+                logger.info(f"  {feat_name}: normalized using min={col_min:.2f}, max={col_max:.2f}")
+            else:
+                logger.warning(f"  {feat_name}: skipping normalization (min == max)")
+
+        logger.info(f"✓ Extracted and normalized numerical features with shape: {numerical_features.shape}")
+        logger.info(f"  Features: age_min, age_max, duration_mins (normalized to [0, 1] range)")
 
         return numerical_features
 
