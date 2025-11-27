@@ -1634,7 +1634,7 @@ class NewDataEvaluator:
         nn_baseline_comparison = self.compare_nn_with_baseline(results, baseline_results)
 
         # Step 8: Evaluate Random Forest baseline
-        rf_results = self.evaluate_random_forest(embeddings, true_labels)
+        rf_results = self.evaluate_random_forest(text_embeddings, true_labels)
 
         # Step 9: Compare Neural Network with baseline (original test set)
         comparison = self.compare_with_baseline(results)
