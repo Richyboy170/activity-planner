@@ -53,7 +53,7 @@ class NeuralClassifier(nn.Module):
     with input dropout and progressive dropout in deeper layers.
     """
 
-    def __init__(self, input_dim=384, hidden_dims=[128, 64], num_classes=4, dropout=0.3):
+    def __init__(self, input_dim=387, hidden_dims=[256, 128, 64], num_classes=4, dropout=0.2):
         super(NeuralClassifier, self).__init__()
 
         layers = []
@@ -172,19 +172,19 @@ class NewDataEvaluator:
 
             # Initialize model with same architecture as the checkpoint
             model = NeuralClassifier(
-                input_dim=384,
-                hidden_dims=[128, 64],
+                input_dim=387,
+                hidden_dims=[256, 128, 64],
                 num_classes=num_classes_in_checkpoint,
-                dropout=0.3
+                dropout=0.2
             )
         else:
             # Fallback: use expected architecture
             logger.warning("Could not detect architecture from checkpoint, using default (4 classes)")
             model = NeuralClassifier(
-                input_dim=384,
-                hidden_dims=[128, 64],
+                input_dim=387,
+                hidden_dims=[256, 128, 64],
                 num_classes=4,
-                dropout=0.3
+                dropout=0.2
             )
 
         # Load state dict into model
@@ -270,7 +270,7 @@ class NewDataEvaluator:
                 return report.get('baseline_model', {})
         return {}
 
-    def load_new_data(self, csv_path: str, data_source_description: str) -> Tuple[List[str], np.ndarray]:
+    def load_new_data(self, csv_path: str, data_source_description: str) -> Tuple[List[str], np.ndarray, pd.DataFrame]:
         """
         Load new data from CSV file.
 
@@ -279,7 +279,7 @@ class NewDataEvaluator:
             data_source_description: Description of where/how the data was obtained
 
         Returns:
-            Tuple of (activity texts, true labels)
+            Tuple of (activity texts, true labels, dataframe)
         """
         logger.info(f"Loading new data from: {csv_path}")
 
@@ -345,7 +345,40 @@ class NewDataEvaluator:
         for label, count in zip(unique, counts):
             logger.info(f"  {self.age_groups[label]}: {count} samples ({count/len(labels)*100:.1f}%)")
 
-        return activity_texts, labels
+        return activity_texts, labels, df
+
+    def extract_numerical_features(self, df: pd.DataFrame) -> np.ndarray:
+        """
+        Extract numerical features: age_min, age_max, duration_mins.
+
+        Args:
+            df: DataFrame containing the data
+
+        Returns:
+            Array of numerical features with shape (n_samples, 3)
+        """
+        logger.info("Extracting numerical features (age_min, age_max, duration_mins)...")
+
+        numerical_features = []
+        for idx, row in df.iterrows():
+            age_min = row.get('age_min', 0)
+            age_max = row.get('age_max', 0)
+            duration_mins = row.get('duration_mins', 0)
+
+            # Handle missing values
+            if pd.isna(age_min):
+                age_min = 0
+            if pd.isna(age_max):
+                age_max = 0
+            if pd.isna(duration_mins):
+                duration_mins = 0
+
+            numerical_features.append([age_min, age_max, duration_mins])
+
+        numerical_features = np.array(numerical_features, dtype=np.float32)
+        logger.info(f"Extracted numerical features with shape: {numerical_features.shape}")
+
+        return numerical_features
 
     def generate_embeddings(self, texts: List[str]) -> np.ndarray:
         """Generate embeddings for activity texts."""
@@ -1494,39 +1527,46 @@ class NewDataEvaluator:
         logger.info("="*80)
 
         # Step 1: Load new data
-        activity_texts, true_labels = self.load_new_data(new_data_path, data_source_description)
+        activity_texts, true_labels, df = self.load_new_data(new_data_path, data_source_description)
 
         # Step 2: Generate embeddings
-        embeddings = self.generate_embeddings(activity_texts)
+        text_embeddings = self.generate_embeddings(activity_texts)
 
-        # Step 3: Evaluate baseline (majority class predictor)
+        # Step 3: Extract numerical features
+        numerical_features = self.extract_numerical_features(df)
+
+        # Step 4: Combine text embeddings with numerical features
+        embeddings = np.concatenate([text_embeddings, numerical_features], axis=1)
+        logger.info(f"Combined features shape: {embeddings.shape}")
+
+        # Step 5: Evaluate baseline (majority class predictor)
         baseline_results = self.evaluate_baseline(true_labels)
 
-        # Step 4: Evaluate Neural Network model
+        # Step 6: Evaluate Neural Network model
         results = self.evaluate_model(embeddings, true_labels)
 
-        # Step 5: Compare Neural Network with simple baseline
+        # Step 7: Compare Neural Network with simple baseline
         nn_baseline_comparison = self.compare_nn_with_baseline(results, baseline_results)
 
-        # Step 6: Evaluate Random Forest baseline
+        # Step 8: Evaluate Random Forest baseline
         rf_results = self.evaluate_random_forest(embeddings, true_labels)
 
-        # Step 7: Compare Neural Network with baseline (original test set)
+        # Step 9: Compare Neural Network with baseline (original test set)
         comparison = self.compare_with_baseline(results)
 
-        # Step 8: Compare Random Forest with baseline (original test set)
+        # Step 10: Compare Random Forest with baseline (original test set)
         rf_baseline_comparison = self.compare_rf_with_baseline(rf_results) if rf_results else {}
 
-        # Step 9: Compare Neural Network with Random Forest
+        # Step 11: Compare Neural Network with Random Forest
         model_comparison = self.compare_models(results, rf_results)
 
-        # Step 10: Generate visualizations
+        # Step 12: Generate visualizations
         self.generate_visualizations(results, comparison, rf_results, model_comparison, rf_baseline_comparison, nn_baseline_comparison)
 
-        # Step 11: Generate report
+        # Step 13: Generate report
         self.generate_report(results, comparison, new_data_path, rf_results, model_comparison, rf_baseline_comparison, nn_baseline_comparison, baseline_results)
 
-        # Step 12: Save results
+        # Step 14: Save results
         self.save_results(results, comparison, rf_results, model_comparison, rf_baseline_comparison, nn_baseline_comparison, baseline_results)
 
         logger.info("="*80)
