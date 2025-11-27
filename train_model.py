@@ -129,7 +129,12 @@ class ActivityDataProcessor:
         if not os.path.exists(self.config.dataset_path):
             raise FileNotFoundError(f"Dataset not found: {self.config.dataset_path}")
 
-        self.df_activities = pd.read_csv(self.config.dataset_path)
+        # Try reading with different encodings to handle various file formats
+        try:
+            self.df_activities = pd.read_csv(self.config.dataset_path, encoding='utf-8')
+        except UnicodeDecodeError:
+            logger.warning("UTF-8 decoding failed, trying latin-1 encoding...")
+            self.df_activities = pd.read_csv(self.config.dataset_path, encoding='latin-1')
 
         # Shuffle the dataset rows for data augmentation
         logger.info(f"✓ Loaded {len(self.df_activities)} activities")
