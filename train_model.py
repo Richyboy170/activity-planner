@@ -141,11 +141,11 @@ class ActivityDataProcessor:
         return self.df_activities
 
     def create_text_representations(self) -> List[str]:
-        """Create rich text representations for each activity"""
-        logger.info("Creating text representations for activities...")
+        """Create text representations using only title, tags, and how_to_play for feature selection"""
+        logger.info("Creating text representations for activities (feature selection: title + tags + how_to_play)...")
 
         def create_activity_text(row):
-            """Combine all relevant fields with weighted importance"""
+            """Combine only title, tags, and how_to_play as specified by feature selection"""
             parts = []
 
             # Title (most important - repeat 3 times for weight)
@@ -153,25 +153,58 @@ class ActivityDataProcessor:
                 title = str(row['title'])
                 parts.extend([title, title, title])
 
-            # Tags and description fields (high importance - repeat 2 times)
-            for col in ['tags', 'how_to_play', 'indoor_outdoor', 'season']:
-                if col in row.index and pd.notna(row[col]):
-                    value = str(row[col])
-                    parts.extend([value, value])
+            # Tags and how_to_play (high importance - repeat 2 times)
+            if 'tags' in row.index and pd.notna(row['tags']):
+                tags = str(row['tags'])
+                parts.extend([tags, tags])
 
-            # Other metadata (normal importance)
-            for col in row.index:
-                if col not in ['title', 'tags', 'how_to_play', 'indoor_outdoor', 'season']:
-                    if pd.notna(row[col]):
-                        parts.append(str(row[col]))
+            if 'how_to_play' in row.index and pd.notna(row['how_to_play']):
+                how_to_play = str(row['how_to_play'])
+                parts.extend([how_to_play, how_to_play])
 
             return ' '.join(parts)
 
         self.activity_texts = self.df_activities.apply(create_activity_text, axis=1).tolist()
-        logger.info(f"✓ Created {len(self.activity_texts)} text representations")
+        logger.info(f"✓ Created {len(self.activity_texts)} text representations (title + tags + how_to_play)")
         logger.info(f"  Sample (first 150 chars): {self.activity_texts[0][:150]}...")
 
         return self.activity_texts
+
+    def extract_numerical_features(self) -> np.ndarray:
+        """Extract numerical features: age_min, age_max, duration_mins"""
+        logger.info("Extracting numerical features (age_min, age_max, duration_mins)...")
+
+        numerical_features = []
+        for idx, row in self.df_activities.iterrows():
+            age_min = row.get('age_min', 0)
+            age_max = row.get('age_max', 0)
+            duration_mins = row.get('duration_mins', 0)
+
+            # Handle missing values
+            if pd.isna(age_min):
+                age_min = 0
+            if pd.isna(age_max):
+                age_max = 0
+            if pd.isna(duration_mins):
+                duration_mins = 0
+
+            numerical_features.append([age_min, age_max, duration_mins])
+
+        numerical_features = np.array(numerical_features, dtype=np.float32)
+
+        # Normalize the numerical features (important for neural networks)
+        # Using simple min-max normalization
+        for i in range(numerical_features.shape[1]):
+            col = numerical_features[:, i]
+            col_min = col.min()
+            col_max = col.max()
+            if col_max > col_min:
+                numerical_features[:, i] = (col - col_min) / (col_max - col_min)
+
+        logger.info(f"✓ Extracted {numerical_features.shape[0]} samples with {numerical_features.shape[1]} numerical features")
+        logger.info(f"  Features: age_min, age_max, duration_mins (normalized)")
+
+        return numerical_features
 
 
 class BM25Indexer:
@@ -419,9 +452,18 @@ class NeuralTrainer:
             logger.warning("  Continuing with original unbalanced data")
             return X, y
 
-    def prepare_data(self, embeddings: np.ndarray, df_activities: pd.DataFrame):
-        """Split data into train/validation/test sets with balanced age group distribution"""
+    def prepare_data(self, embeddings: np.ndarray, numerical_features: np.ndarray, df_activities: pd.DataFrame):
+        """Split data into train/validation/test sets with balanced age group distribution
+
+        Combines text embeddings with numerical features for training.
+        """
         logger.info("\n[Neural Network] Preparing train/validation/test split with balanced distribution...")
+        logger.info(f"  Text embeddings shape: {embeddings.shape}")
+        logger.info(f"  Numerical features shape: {numerical_features.shape}")
+
+        # Combine embeddings and numerical features
+        combined_features = np.concatenate([embeddings, numerical_features], axis=1)
+        logger.info(f"  Combined features shape: {combined_features.shape}")
 
         # Create labels based on age groups using age midpoint for better accuracy
         # Toddler (0-3): 0, Preschool (4-6): 1, Elementary (7-10): 2, Teen+ (11+): 3
@@ -454,7 +496,7 @@ class NeuralTrainer:
         # Stratified split to ensure balanced distribution across all sets
         # First split: separate test set (10%)
         X_temp, X_test, y_temp, y_test = train_test_split(
-            embeddings, labels, test_size=0.10, random_state=42, stratify=labels
+            combined_features, labels, test_size=0.10, random_state=42, stratify=labels
         )
 
         # Second split: separate train and validation (80% train, 10% val from remaining)
@@ -467,17 +509,17 @@ class NeuralTrainer:
         X_train, y_train = self.balance_with_smote(X_train, y_train)
 
         # Display distribution in each split
-        logger.info(f"\n✓ Train set: {len(X_train)} samples ({len(X_train)/len(embeddings)*100:.1f}%)")
+        logger.info(f"\n✓ Train set: {len(X_train)} samples ({len(X_train)/len(combined_features)*100:.1f}%)")
         unique, counts = np.unique(y_train, return_counts=True)
         for label, count in zip(unique, counts):
             logger.info(f"    {label_names[label]}: {count} ({count/len(y_train)*100:.1f}%)")
 
-        logger.info(f"\n✓ Validation set: {len(X_val)} samples ({len(X_val)/len(embeddings)*100:.1f}%)")
+        logger.info(f"\n✓ Validation set: {len(X_val)} samples ({len(X_val)/len(combined_features)*100:.1f}%)")
         unique, counts = np.unique(y_val, return_counts=True)
         for label, count in zip(unique, counts):
             logger.info(f"    {label_names[label]}: {count} ({count/len(y_val)*100:.1f}%)")
 
-        logger.info(f"\n✓ Test set: {len(X_test)} samples ({len(X_test)/len(embeddings)*100:.1f}%)")
+        logger.info(f"\n✓ Test set: {len(X_test)} samples ({len(X_test)/len(combined_features)*100:.1f}%)")
         unique, counts = np.unique(y_test, return_counts=True)
         for label, count in zip(unique, counts):
             logger.info(f"    {label_names[label]}: {count} ({count/len(y_test)*100:.1f}%)")
@@ -504,8 +546,9 @@ class NeuralTrainer:
     def build_model(self, input_dim: int, num_classes: int):
         """Build neural network model with heavy regularization"""
         logger.info(f"\n[Neural Network] Building model...")
-        logger.info(f"  Input dimension: {input_dim}")
+        logger.info(f"  Input dimension: {input_dim} (embeddings + numerical features)")
         logger.info(f"  Number of classes: {num_classes}")
+        logger.info(f"  Features: title, tags, how_to_play (text) + age_min, age_max, duration_mins (numerical)")
 
         # Improved architecture for SMOTE-balanced dataset
         # Using 3 hidden layers with reduced dropout for better learning
@@ -692,11 +735,21 @@ class NeuralTrainer:
 
         return test_loss, test_acc
 
-    def cross_validate(self, embeddings: np.ndarray, labels: np.ndarray, k_folds: int = 5,
+    def cross_validate(self, embeddings: np.ndarray, numerical_features: np.ndarray,
+                      labels: np.ndarray, k_folds: int = 5,
                       num_epochs: int = 100, learning_rate: float = 0.001):
-        """Perform K-fold cross-validation to evaluate model generalization"""
+        """Perform K-fold cross-validation to evaluate model generalization
+
+        Combines text embeddings with numerical features for cross-validation.
+        """
         logger.info(f"\n[K-Fold Cross-Validation] Starting {k_folds}-fold cross-validation...")
-        logger.info(f"  Dataset size: {len(embeddings)}")
+        logger.info(f"  Text embeddings shape: {embeddings.shape}")
+        logger.info(f"  Numerical features shape: {numerical_features.shape}")
+
+        # Combine embeddings and numerical features
+        combined_features = np.concatenate([embeddings, numerical_features], axis=1)
+        logger.info(f"  Combined features shape: {combined_features.shape}")
+        logger.info(f"  Dataset size: {len(combined_features)}")
         logger.info(f"  Number of folds: {k_folds}")
         logger.info(f"  Max epochs per fold: {num_epochs}")
         logger.info("="*70)
@@ -709,15 +762,15 @@ class NeuralTrainer:
 
         label_names = ['Toddler (0-3)', 'Preschool (4-6)', 'Elementary (7-10)', 'Teen+ (11+)']
 
-        for fold_idx, (train_idx, val_idx) in enumerate(kfold.split(embeddings)):
+        for fold_idx, (train_idx, val_idx) in enumerate(kfold.split(combined_features)):
             logger.info(f"\n{'='*70}")
             logger.info(f"Fold {fold_idx + 1}/{k_folds}")
             logger.info(f"{'='*70}")
 
             # Split data
-            X_train_fold = embeddings[train_idx]
+            X_train_fold = combined_features[train_idx]
             y_train_fold = labels[train_idx]
-            X_val_fold = embeddings[val_idx]
+            X_val_fold = combined_features[val_idx]
             y_val_fold = labels[val_idx]
 
             logger.info(f"  Train size: {len(X_train_fold)} | Validation size: {len(X_val_fold)}")
@@ -729,9 +782,9 @@ class NeuralTrainer:
             train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
             val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
 
-            # Rebuild model for this fold (using updated architecture)
+            # Rebuild model for this fold (using updated architecture with combined features)
             num_classes = len(np.unique(labels))
-            input_dim = embeddings.shape[1]
+            input_dim = combined_features.shape[1]  # Now includes embeddings + numerical features
             hidden_dims = [256, 128, 64]  # Match main training architecture
 
             model = ActivityClassifier(input_dim, hidden_dims, num_classes, dropout=0.2)
@@ -885,6 +938,7 @@ class ModelTrainer:
         self.neural_trainer = NeuralTrainer(config)
         self.df_activities = None
         self.activity_texts = None
+        self.numerical_features = None
 
     def train(self):
         """Execute full training pipeline"""
@@ -909,7 +963,14 @@ class ModelTrainer:
         logger.info(f"  ⏱ Step completed in {format_time(time.time() - step_start)}")
         log_memory_usage()
 
-        # Step 2: Build BM25 index
+        # Step 2.5: Extract numerical features for neural network
+        logger.info("\n[2.5/8] Extracting numerical features...")
+        step_start = time.time()
+        self.numerical_features = self.data_processor.extract_numerical_features()
+        logger.info(f"  ⏱ Step completed in {format_time(time.time() - step_start)}")
+        log_memory_usage()
+
+        # Step 3: Build BM25 index
         logger.info("\n[3/8] Building BM25 keyword index...")
         step_start = time.time()
         self.bm25_indexer.build_index(self.activity_texts)
@@ -959,6 +1020,7 @@ class ModelTrainer:
         # Run cross-validation
         cv_results, avg_cv_loss, avg_cv_acc = self.neural_trainer.cross_validate(
             self.dense_embedder.embeddings,
+            self.numerical_features,
             labels,
             k_folds=5,
             num_epochs=100,
@@ -969,9 +1031,15 @@ class ModelTrainer:
         # Step 6: Train final neural network on full train/val/test split
         logger.info("\n[7/8] Training final neural network classifier...")
         step_start = time.time()
-        num_classes = self.neural_trainer.prepare_data(self.dense_embedder.embeddings, self.df_activities)
+        num_classes = self.neural_trainer.prepare_data(
+            self.dense_embedder.embeddings,
+            self.numerical_features,
+            self.df_activities
+        )
+        # Combined input dimension: embeddings + numerical features
+        input_dim = self.dense_embedder.embeddings.shape[1] + self.numerical_features.shape[1]
         self.neural_trainer.build_model(
-            input_dim=self.dense_embedder.embeddings.shape[1],
+            input_dim=input_dim,
             num_classes=num_classes
         )
         test_loss, test_acc = self.neural_trainer.train(num_epochs=100, learning_rate=0.001, patience=15)
