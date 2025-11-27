@@ -113,7 +113,7 @@ class ModelTester:
 
     def load_and_prepare_data(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray,
                                               np.ndarray, np.ndarray, np.ndarray]:
-        """Load dataset and prepare train/val/test splits with embeddings."""
+        """Load dataset and prepare train/val/test splits with embeddings and numerical features."""
         print("Loading and preparing data...")
 
         # Create config with the dataset path
@@ -128,6 +128,13 @@ class ModelTester:
         embedder.load_model()
         texts = processor.create_text_representations()
         embeddings = embedder.generate_embeddings(texts)
+
+        # Extract numerical features (age_min, age_max, duration_mins)
+        numerical_features = processor.extract_numerical_features()
+
+        # Combine embeddings with numerical features
+        combined_features = np.concatenate([embeddings, numerical_features], axis=1)
+        print(f"  Combined features shape: {combined_features.shape} (embeddings + numerical)")
 
         # Create age group labels (matching train_model-unaugmented.py)
         def get_age_group(row) -> int:
@@ -147,7 +154,7 @@ class ModelTester:
         labels = df.apply(get_age_group, axis=1).values
 
         # Split data (80/10/10)
-        n = len(embeddings)
+        n = len(combined_features)
         train_size = int(0.8 * n)
         val_size = int(0.1 * n)
 
@@ -156,11 +163,11 @@ class ModelTester:
         val_idx = indices[train_size:train_size + val_size]
         test_idx = indices[train_size + val_size:]
 
-        X_train = embeddings[train_idx]
+        X_train = combined_features[train_idx]
         y_train = labels[train_idx]
-        X_val = embeddings[val_idx]
+        X_val = combined_features[val_idx]
         y_val = labels[val_idx]
-        X_test = embeddings[test_idx]
+        X_test = combined_features[test_idx]
         y_test = labels[test_idx]
 
         print(f"✓ Data loaded: Train={len(X_train)}, Val={len(X_val)}, Test={len(X_test)}")
@@ -240,7 +247,14 @@ class ModelTester:
         print("="*60)
 
         # Model architecture (must match training)
-        hidden_dims = [128, 64]  # Reduced architecture for small dataset
+        # The saved model uses: 387 input (384 embeddings + 3 numerical features), [256, 128, 64] hidden layers
+        hidden_dims = [256, 128, 64]
+        input_dim = X_train.shape[1]  # Should be 387 (384 embeddings + 3 numerical features)
+        num_classes = 4  # Toddler, Preschool, Elementary, Teen+
+
+        print(f"  Input dimension: {input_dim} (384 embeddings + 3 numerical features)")
+        print(f"  Hidden layers: {hidden_dims}")
+        print(f"  Output classes: {num_classes}")
 
         # Check if model exists
         model_path = Path(model_path)
@@ -251,7 +265,10 @@ class ModelTester:
         else:
             print(f"✓ Loading model from {model_path}")
 
-            # Load checkpoint first to inspect architecture
+            # Create model with the correct architecture
+            model = ActivityClassifier(input_dim=input_dim, hidden_dims=hidden_dims, num_classes=num_classes)
+
+            # Load checkpoint
             checkpoint = torch.load(model_path, map_location='cpu')
 
             # Extract state_dict
@@ -259,28 +276,6 @@ class ModelTester:
                 state_dict = checkpoint['model_state_dict']
             else:
                 state_dict = checkpoint
-
-            # Detect number of classes from the output layer
-            # The output layer is the last linear layer (model.9.weight for hidden_dims=[256,128])
-            output_layer_key = None
-            for key in state_dict.keys():
-                if 'weight' in key and len(state_dict[key].shape) == 2:
-                    output_layer_key = key
-
-            if output_layer_key:
-                num_classes_in_checkpoint = state_dict[output_layer_key].shape[0]
-                expected_num_classes = 4
-
-                if num_classes_in_checkpoint != expected_num_classes:
-                    print(f"⚠ WARNING: Checkpoint has {num_classes_in_checkpoint} output classes, but current code expects {expected_num_classes}")
-                    print(f"⚠ Using checkpoint architecture ({num_classes_in_checkpoint} classes). Please retrain the model for {expected_num_classes} classes.")
-
-                # Create model with the architecture from the checkpoint
-                model = ActivityClassifier(input_dim=384, hidden_dims=hidden_dims, num_classes=num_classes_in_checkpoint)
-            else:
-                # Fallback: use expected architecture
-                print("⚠ Could not detect architecture from checkpoint, using default (4 classes)")
-                model = ActivityClassifier(input_dim=384, hidden_dims=hidden_dims, num_classes=4)
 
             # Load the state dict
             model.load_state_dict(state_dict)
@@ -325,25 +320,25 @@ class ModelTester:
         total_params = sum(p.numel() for p in model.parameters())
         trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
-        # Get the actual number of output classes from the model
-        num_output_classes = list(model.parameters())[-1].shape[0]
-        architecture_str = f"384 → 128 → 64 → {num_output_classes}"
+        # Architecture string
+        architecture_str = f"{input_dim} → {' → '.join(map(str, hidden_dims))} → {num_classes}"
 
         results = {
             "model_info": {
                 "model_type": "Multi-layer Neural Network",
                 "architecture": architecture_str,
                 "layers": [
-                    "Input: 384 (Sentence-BERT embeddings)",
-                    "Hidden 1: Linear(384, 128) + BatchNorm + ReLU + Dropout(0.5)",
-                    "Hidden 2: Linear(128, 64) + BatchNorm + ReLU + Dropout(0.5)",
-                    f"Output: Linear(64, {num_output_classes})"
+                    f"Input: {input_dim} (384 Sentence-BERT embeddings + 3 numerical features)",
+                    f"Hidden 1: Linear({input_dim}, {hidden_dims[0]}) + ReLU + BatchNorm + Dropout(0.2)",
+                    f"Hidden 2: Linear({hidden_dims[0]}, {hidden_dims[1]}) + ReLU + BatchNorm + Dropout(0.2)",
+                    f"Hidden 3: Linear({hidden_dims[1]}, {hidden_dims[2]}) + ReLU + BatchNorm + Dropout(0.2)",
+                    f"Output: Linear({hidden_dims[2]}, {num_classes})"
                 ],
                 "total_parameters": total_params,
                 "trainable_parameters": trainable_params,
                 "optimizer": "Adam (lr=0.001)",
                 "loss_function": "CrossEntropyLoss",
-                "regularization": ["BatchNorm", "Dropout(0.5)"]
+                "regularization": ["BatchNorm", "Dropout(0.2)", "L2 Weight Decay (5e-5)"]
             },
             "accuracy": float(accuracy),
             "precision": float(precision),
@@ -378,12 +373,16 @@ class ModelTester:
         print(f"Using device: {device}")
 
         # Model architecture (must match training)
-        hidden_dims = [128, 64]  # Reduced architecture for small dataset
+        hidden_dims = [256, 128, 64]
+        input_dim = X_train.shape[1]  # Should be 387 (384 embeddings + 3 numerical features)
+        num_classes = 4
+
+        print(f"  Training with input_dim={input_dim}, hidden_dims={hidden_dims}, num_classes={num_classes}")
 
         # Create model
-        model = ActivityClassifier(input_dim=384, hidden_dims=hidden_dims, num_classes=4).to(device)
+        model = ActivityClassifier(input_dim=input_dim, hidden_dims=hidden_dims, num_classes=num_classes).to(device)
         criterion = nn.CrossEntropyLoss()
-        optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+        optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=5e-5)
 
         # Prepare data
         train_dataset = ActivityDataset(X_train, y_train)
