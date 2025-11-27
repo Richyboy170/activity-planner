@@ -180,6 +180,8 @@ class ActivityDataProcessor:
         logger.info("Extracting numerical features (age_min, age_max, duration_mins)...")
 
         numerical_features = []
+        feature_names = ['age_min', 'age_max', 'duration_mins']
+
         for idx, row in self.df_activities.iterrows():
             age_min = row.get('age_min', 0)
             age_max = row.get('age_max', 0)
@@ -199,17 +201,41 @@ class ActivityDataProcessor:
 
         # Normalize the numerical features (important for neural networks)
         # Using simple min-max normalization
-        for i in range(numerical_features.shape[1]):
+        # IMPORTANT: Save normalization parameters for use during evaluation
+        self.normalization_params = {}
+        for i, feat_name in enumerate(feature_names):
             col = numerical_features[:, i]
             col_min = col.min()
             col_max = col.max()
+
+            # Store parameters
+            self.normalization_params[feat_name] = {
+                'min': float(col_min),
+                'max': float(col_max)
+            }
+
             if col_max > col_min:
                 numerical_features[:, i] = (col - col_min) / (col_max - col_min)
+                logger.info(f"  {feat_name}: normalized using min={col_min:.2f}, max={col_max:.2f}")
 
         logger.info(f"✓ Extracted {numerical_features.shape[0]} samples with {numerical_features.shape[1]} numerical features")
         logger.info(f"  Features: age_min, age_max, duration_mins (normalized)")
 
         return numerical_features
+
+    def save_normalization_params(self, output_dir: str):
+        """Save normalization parameters for use during evaluation"""
+        if not hasattr(self, 'normalization_params'):
+            logger.warning("No normalization parameters to save")
+            return
+
+        os.makedirs(output_dir, exist_ok=True)
+        params_path = os.path.join(output_dir, 'normalization_params.json')
+
+        with open(params_path, 'w') as f:
+            json.dump(self.normalization_params, f, indent=2)
+
+        logger.info(f"✓ Normalization parameters saved to {params_path}")
 
 
 class BM25Indexer:
@@ -998,6 +1024,8 @@ class ModelTrainer:
         step_start = time.time()
         self._save_dataset()
         self.config.save(os.path.join(self.config.output_dir, 'training_config.json'))
+        # Save normalization parameters for evaluation
+        self.data_processor.save_normalization_params(self.config.output_dir)
         logger.info(f"  ⏱ Step completed in {format_time(time.time() - step_start)}")
 
         # Step 5: Perform K-fold cross-validation for model evaluation
