@@ -3,20 +3,21 @@
 ## Feature Selection for Neural Network Classifier
 
 ### Overview
-Implemented feature selection in `train_model.py` to train the neural network classifier using only the most relevant features: **title**, **tags**, **age_min**, **age_max**, and **duration_mins**.
+Implemented feature selection in `train_model.py` to train the neural network classifier using only the most relevant features: **title**, **tags**, **how_to_play**, **age_min**, **age_max**, and **duration_mins**.
 
 ### Changes Made
 
-#### 1. Text Feature Selection (Lines 143-167)
+#### 1. Text Feature Selection (Lines 143-171)
 - **Modified**: `create_text_representations()` method
-- **Change**: Now uses only **title** and **tags** for text features
-- **Removed**: All other text fields (how_to_play, indoor_outdoor, season, etc.)
+- **Change**: Now uses only **title**, **tags**, and **how_to_play** for text features
+- **Removed**: Other text fields (indoor_outdoor, season, etc.)
 - **Implementation**:
   - Title: Repeated 3 times for higher weight
   - Tags: Repeated 2 times for importance
+  - How_to_play: Repeated 2 times for importance
   - Creates text representations that focus on the most descriptive features
 
-#### 2. Numerical Feature Extraction (Lines 169-203)
+#### 2. Numerical Feature Extraction (Lines 173-207)
 - **Added**: New `extract_numerical_features()` method
 - **Features Extracted**: age_min, age_max, duration_mins
 - **Normalization**: Min-max normalization applied to all numerical features
@@ -74,6 +75,7 @@ for i in range(numerical_features.shape[1]):
 #### Feature Selection Rationale
 - **title**: Most descriptive field for activity identification
 - **tags**: Captures key characteristics and categories
+- **how_to_play**: Provides detailed activity instructions and context
 - **age_min/age_max**: Critical for age group classification
 - **duration_mins**: Important temporal feature
 
@@ -92,7 +94,7 @@ python train_model.py
 ```
 
 The model will automatically:
-1. Extract only title and tags for text features
+1. Extract only title, tags, and how_to_play for text features
 2. Generate embeddings from these text features
 3. Extract and normalize age_min, age_max, duration_mins
 4. Combine all features into a 387-dimensional vector

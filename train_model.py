@@ -141,11 +141,11 @@ class ActivityDataProcessor:
         return self.df_activities
 
     def create_text_representations(self) -> List[str]:
-        """Create text representations using only title and tags for feature selection"""
-        logger.info("Creating text representations for activities (feature selection: title + tags)...")
+        """Create text representations using only title, tags, and how_to_play for feature selection"""
+        logger.info("Creating text representations for activities (feature selection: title + tags + how_to_play)...")
 
         def create_activity_text(row):
-            """Combine only title and tags as specified by feature selection"""
+            """Combine only title, tags, and how_to_play as specified by feature selection"""
             parts = []
 
             # Title (most important - repeat 3 times for weight)
@@ -153,15 +153,19 @@ class ActivityDataProcessor:
                 title = str(row['title'])
                 parts.extend([title, title, title])
 
-            # Tags (high importance - repeat 2 times)
+            # Tags and how_to_play (high importance - repeat 2 times)
             if 'tags' in row.index and pd.notna(row['tags']):
                 tags = str(row['tags'])
                 parts.extend([tags, tags])
 
+            if 'how_to_play' in row.index and pd.notna(row['how_to_play']):
+                how_to_play = str(row['how_to_play'])
+                parts.extend([how_to_play, how_to_play])
+
             return ' '.join(parts)
 
         self.activity_texts = self.df_activities.apply(create_activity_text, axis=1).tolist()
-        logger.info(f"✓ Created {len(self.activity_texts)} text representations (title + tags only)")
+        logger.info(f"✓ Created {len(self.activity_texts)} text representations (title + tags + how_to_play)")
         logger.info(f"  Sample (first 150 chars): {self.activity_texts[0][:150]}...")
 
         return self.activity_texts
@@ -544,7 +548,7 @@ class NeuralTrainer:
         logger.info(f"\n[Neural Network] Building model...")
         logger.info(f"  Input dimension: {input_dim} (embeddings + numerical features)")
         logger.info(f"  Number of classes: {num_classes}")
-        logger.info(f"  Features: title, tags (text) + age_min, age_max, duration_mins (numerical)")
+        logger.info(f"  Features: title, tags, how_to_play (text) + age_min, age_max, duration_mins (numerical)")
 
         # Improved architecture for SMOTE-balanced dataset
         # Using 3 hidden layers with reduced dropout for better learning
