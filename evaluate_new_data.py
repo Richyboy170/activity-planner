@@ -477,60 +477,6 @@ class NewDataEvaluator:
         logger.info(f"Generated embeddings with shape: {embeddings.shape}")
         return embeddings
 
-    def evaluate_baseline(self, true_labels: np.ndarray) -> Dict:
-        """
-        Evaluate a simple baseline (majority class predictor) on new data.
-
-        This provides a lower bound for model performance - any useful model
-        should significantly outperform this baseline.
-
-        Args:
-            true_labels: True age group labels
-
-        Returns:
-            Dictionary containing baseline evaluation metrics
-        """
-        logger.info("Evaluating baseline (majority class) on new data...")
-
-        # Find the most common class
-        unique, counts = np.unique(true_labels, return_counts=True)
-        majority_class = unique[np.argmax(counts)]
-
-        # Predict majority class for all samples
-        baseline_predictions = np.full_like(true_labels, majority_class)
-
-        # Calculate accuracy
-        accuracy = accuracy_score(true_labels, baseline_predictions)
-
-        # Per-class metrics
-        all_labels = list(range(4))
-        precision_per_class, recall_per_class, f1_per_class, support_per_class = \
-            precision_recall_fscore_support(true_labels, baseline_predictions, labels=all_labels, average=None, zero_division=0)
-
-        # Confusion matrix
-        conf_matrix = confusion_matrix(true_labels, baseline_predictions, labels=all_labels)
-
-        results = {
-            'overall_metrics': {
-                'accuracy': float(accuracy),
-                'num_samples': len(true_labels)
-            },
-            'majority_class': int(majority_class),
-            'majority_class_name': self.age_groups[majority_class],
-            'per_class_metrics': {
-                self.age_groups[i]: {
-                    'precision': float(precision_per_class[i]),
-                    'recall': float(recall_per_class[i]),
-                    'f1_score': float(f1_per_class[i]),
-                    'support': int(support_per_class[i])
-                }
-                for i in range(4)
-            },
-            'confusion_matrix': conf_matrix.tolist()
-        }
-
-        logger.info(f"Baseline evaluation complete - Accuracy: {accuracy:.4f} (predicting {self.age_groups[majority_class]})")
-        return results
 
     def evaluate_model(self, embeddings: np.ndarray, true_labels: np.ndarray) -> Dict:
         """
@@ -872,39 +818,6 @@ class NewDataEvaluator:
 
         return comparison
 
-    def compare_nn_with_baseline(self, nn_results: Dict, baseline_results: Dict) -> Dict:
-        """
-        Compare Neural Network with simple baseline (majority class) on new data.
-
-        Args:
-            nn_results: Results from Neural Network evaluation
-            baseline_results: Results from baseline evaluation
-
-        Returns:
-            Dictionary containing comparison analysis
-        """
-        logger.info("Comparing Neural Network vs Baseline (majority class) on new data...")
-
-        nn_acc = nn_results['overall_metrics']['accuracy']
-        baseline_acc = baseline_results['overall_metrics']['accuracy']
-
-        improvement = nn_acc - baseline_acc
-        relative_improvement = (improvement / baseline_acc * 100) if baseline_acc > 0 else 0
-
-        comparison = {
-            'accuracy': {
-                'neural_network': float(nn_acc),
-                'baseline': float(baseline_acc),
-                'improvement': float(improvement),
-                'relative_improvement_pct': float(relative_improvement)
-            },
-            'baseline_method': f"Majority class ({baseline_results['majority_class_name']})"
-        }
-
-        logger.info(f"Neural Network Accuracy: {nn_acc:.4f} | Baseline Accuracy: {baseline_acc:.4f}")
-        logger.info(f"Improvement: {improvement:.4f} ({relative_improvement:.2f}%)")
-
-        return comparison
 
     def compare_models(self, nn_results: Dict, rf_results: Dict) -> Dict:
         """
@@ -961,7 +874,7 @@ class NewDataEvaluator:
 
         return comparison
 
-    def generate_visualizations(self, results: Dict, comparison: Dict, rf_results: Dict = None, model_comparison: Dict = None, rf_baseline_comparison: Dict = None, nn_baseline_comparison: Dict = None):
+    def generate_visualizations(self, results: Dict, comparison: Dict, rf_results: Dict = None, model_comparison: Dict = None, rf_baseline_comparison: Dict = None):
         """Generate visualization plots for the evaluation."""
         logger.info("Generating visualizations...")
 
@@ -988,21 +901,17 @@ class NewDataEvaluator:
         if model_comparison:
             self._plot_model_comparison(model_comparison)
 
-        # 6. Baseline Accuracy Comparison (Neural Network vs Majority Class Baseline)
-        if nn_baseline_comparison:
-            self._plot_nn_baseline_comparison(nn_baseline_comparison)
-
-        # 7. Per-Class Performance - Neural Network
+        # 6. Per-Class Performance - Neural Network
         self._plot_per_class_performance(results, model_name='Neural Network')
 
-        # 8. Per-Class Performance - Random Forest (if available)
+        # 7. Per-Class Performance - Random Forest (if available)
         if rf_results:
             self._plot_per_class_performance(rf_results, model_name='Random Forest')
 
-        # 9. Confidence Distribution - Neural Network
+        # 8. Confidence Distribution - Neural Network
         self._plot_confidence_distribution(results, model_name='Neural Network')
 
-        # 10. Confidence Distribution - Random Forest (if available)
+        # 9. Confidence Distribution - Random Forest (if available)
         if rf_results:
             self._plot_confidence_distribution(rf_results, model_name='Random Forest')
 
@@ -1099,50 +1008,6 @@ class NewDataEvaluator:
         plt.savefig(self.figures_dir / 'neural_network_vs_random_forest.png', dpi=300, bbox_inches='tight')
         plt.close()
 
-    def _plot_nn_baseline_comparison(self, nn_baseline_comparison: Dict):
-        """Plot comparison between Neural Network and Baseline (Majority Class)."""
-        nn_acc = nn_baseline_comparison['accuracy']['neural_network']
-        baseline_acc = nn_baseline_comparison['accuracy']['baseline']
-        improvement = nn_baseline_comparison['accuracy']['improvement']
-
-        fig, ax = plt.subplots(figsize=(10, 6))
-
-        x = np.arange(1)
-        width = 0.35
-
-        bars1 = ax.bar(x - width/2, [baseline_acc], width, label='Baseline (Majority Class)', alpha=0.8, color='#E63946')
-        bars2 = ax.bar(x + width/2, [nn_acc], width, label='Neural Network', alpha=0.8, color='#06A77D')
-
-        ax.set_xlabel('Model', fontsize=12)
-        ax.set_ylabel('Accuracy', fontsize=12)
-        ax.set_title('Baseline vs Neural Network Accuracy on New Data', fontsize=14, fontweight='bold')
-        ax.set_xticks(x)
-        ax.set_xticklabels(['Accuracy Comparison'])
-        ax.legend()
-        ax.set_ylim(0, 1.0)
-        ax.grid(axis='y', alpha=0.3)
-
-        # Add value labels on bars
-        for bar in bars1:
-            height = bar.get_height()
-            ax.text(bar.get_x() + bar.get_width()/2., height,
-                   f'{height:.3f}',
-                   ha='center', va='bottom', fontsize=10)
-
-        for bar in bars2:
-            height = bar.get_height()
-            ax.text(bar.get_x() + bar.get_width()/2., height,
-                   f'{height:.3f}',
-                   ha='center', va='bottom', fontsize=10)
-
-        # Add improvement annotation
-        ax.annotate(f'Improvement: +{improvement:.3f} ({nn_baseline_comparison["accuracy"]["relative_improvement_pct"]:.1f}%)',
-                   xy=(x[0], max(nn_acc, baseline_acc) + 0.05),
-                   ha='center', fontsize=11, fontweight='bold', color='#06A77D')
-
-        plt.tight_layout()
-        plt.savefig(self.figures_dir / 'nn_vs_baseline_accuracy.png', dpi=300, bbox_inches='tight')
-        plt.close()
 
     def _plot_per_class_performance(self, results: Dict, model_name: str = 'Model'):
         """Plot per-class performance metrics."""
@@ -1203,7 +1068,7 @@ class NewDataEvaluator:
         plt.savefig(self.figures_dir / filename, dpi=300, bbox_inches='tight')
         plt.close()
 
-    def generate_report(self, results: Dict, comparison: Dict, data_path: str, rf_results: Dict = None, model_comparison: Dict = None, rf_baseline_comparison: Dict = None, nn_baseline_comparison: Dict = None, baseline_results: Dict = None) -> str:
+    def generate_report(self, results: Dict, comparison: Dict, data_path: str, rf_results: Dict = None, model_comparison: Dict = None, rf_baseline_comparison: Dict = None) -> str:
         """Generate comprehensive evaluation report in Markdown format."""
         logger.info("Generating evaluation report...")
 
@@ -1280,17 +1145,6 @@ class NewDataEvaluator:
             f"- **Max Confidence:** {results['confidence_stats']['max']:.4f}",
             "",
         ])
-
-        # Add baseline comparison if available
-        if nn_baseline_comparison and baseline_results:
-            report_lines.extend([
-                "### Baseline Comparison (Majority Class Predictor)",
-                "",
-                f"- **Baseline Accuracy:** {baseline_results['overall_metrics']['accuracy']:.4f} ({baseline_results['overall_metrics']['accuracy']*100:.2f}%)",
-                f"- **Baseline Method:** Always predicting **{baseline_results['majority_class_name']}**",
-                f"- **Neural Network Improvement:** +{nn_baseline_comparison['accuracy']['improvement']:.4f} ({nn_baseline_comparison['accuracy']['relative_improvement_pct']:.2f}%)",
-                "",
-            ])
 
         # Add comparison if available
         if comparison:
@@ -1580,9 +1434,6 @@ class NewDataEvaluator:
         ])
 
         viz_num = 7
-        if nn_baseline_comparison:
-            report_lines.append(f"{viz_num}. **Baseline vs Neural Network:** `figures/nn_vs_baseline_accuracy.png`")
-            viz_num += 1
 
         if comparison:
             report_lines.append(f"{viz_num}. **Neural Network Baseline Comparison:** `figures/baseline_vs_new_comparison_neural_network.png`")
@@ -1621,7 +1472,7 @@ class NewDataEvaluator:
         logger.info(f"Report saved to {report_path}")
         return report_content
 
-    def save_results(self, results: Dict, comparison: Dict, rf_results: Dict = None, model_comparison: Dict = None, rf_baseline_comparison: Dict = None, nn_baseline_comparison: Dict = None, baseline_results: Dict = None):
+    def save_results(self, results: Dict, comparison: Dict, rf_results: Dict = None, model_comparison: Dict = None, rf_baseline_comparison: Dict = None):
         """Save results to JSON file."""
         output = {
             'metadata': self.evaluation_metadata,
@@ -1629,12 +1480,6 @@ class NewDataEvaluator:
             'baseline_comparison': comparison,
             'timestamp': datetime.now().isoformat()
         }
-
-        if baseline_results:
-            output['baseline_results'] = baseline_results
-
-        if nn_baseline_comparison:
-            output['nn_baseline_comparison'] = nn_baseline_comparison
 
         if rf_results:
             output['random_forest_results'] = rf_results
@@ -1676,43 +1521,35 @@ class NewDataEvaluator:
         embeddings = np.concatenate([text_embeddings, numerical_features], axis=1)
         logger.info(f"Combined features shape: {embeddings.shape}")
 
-        # Step 5: Evaluate baseline (majority class predictor)
-        baseline_results = self.evaluate_baseline(true_labels)
-
-        # Step 6: Evaluate Neural Network model
+        # Step 5: Evaluate Neural Network model
         results = self.evaluate_model(embeddings, true_labels)
 
-        # Step 7: Compare Neural Network with simple baseline
-        nn_baseline_comparison = self.compare_nn_with_baseline(results, baseline_results)
-
-        # Step 8: Evaluate Random Forest baseline
+        # Step 6: Evaluate Random Forest baseline
         rf_results = self.evaluate_random_forest(embeddings, true_labels)
 
-        # Step 9: Compare Neural Network with baseline (original test set)
+        # Step 7: Compare Neural Network with baseline (original test set)
         comparison = self.compare_with_baseline(results)
 
-        # Step 10: Compare Random Forest with baseline (original test set)
+        # Step 8: Compare Random Forest with baseline (original test set)
         rf_baseline_comparison = self.compare_rf_with_baseline(rf_results) if rf_results else {}
 
-        # Step 11: Compare Neural Network with Random Forest
+        # Step 9: Compare Neural Network with Random Forest
         model_comparison = self.compare_models(results, rf_results)
 
-        # Step 12: Generate visualizations
-        self.generate_visualizations(results, comparison, rf_results, model_comparison, rf_baseline_comparison, nn_baseline_comparison)
+        # Step 10: Generate visualizations
+        self.generate_visualizations(results, comparison, rf_results, model_comparison, rf_baseline_comparison)
 
-        # Step 13: Generate report
-        self.generate_report(results, comparison, new_data_path, rf_results, model_comparison, rf_baseline_comparison, nn_baseline_comparison, baseline_results)
+        # Step 11: Generate report
+        self.generate_report(results, comparison, new_data_path, rf_results, model_comparison, rf_baseline_comparison)
 
-        # Step 14: Save results
-        self.save_results(results, comparison, rf_results, model_comparison, rf_baseline_comparison, nn_baseline_comparison, baseline_results)
+        # Step 12: Save results
+        self.save_results(results, comparison, rf_results, model_comparison, rf_baseline_comparison)
 
         logger.info("="*80)
         logger.info("EVALUATION COMPLETE")
         logger.info("="*80)
         logger.info(f"Results directory: {self.results_dir}")
-        logger.info(f"Baseline Accuracy: {baseline_results['overall_metrics']['accuracy']:.4f}")
         logger.info(f"Neural Network Accuracy: {results['overall_metrics']['accuracy']:.4f}")
-        logger.info(f"Improvement over Baseline: +{nn_baseline_comparison['accuracy']['improvement']:.4f} ({nn_baseline_comparison['accuracy']['relative_improvement_pct']:.2f}%)")
 
         if rf_results:
             logger.info(f"Random Forest Accuracy: {rf_results['overall_metrics']['accuracy']:.4f}")
@@ -1730,7 +1567,7 @@ class NewDataEvaluator:
         if model_comparison:
             logger.info(f"Model Comparison Winner: {model_comparison['accuracy']['winner']}")
 
-        return results, comparison, rf_results, model_comparison, rf_baseline_comparison, nn_baseline_comparison, baseline_results
+        return results, comparison, rf_results, model_comparison, rf_baseline_comparison
 
 
 def main():

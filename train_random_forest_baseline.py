@@ -3,7 +3,7 @@ Train and Save Random Forest Baseline Model
 
 This script trains a Random Forest baseline model and saves it for use in evaluations.
 This ensures that the evaluation scripts can compare the neural network against
-a proper machine learning baseline, not just a majority class predictor.
+the Random Forest baseline.
 """
 
 import numpy as np
