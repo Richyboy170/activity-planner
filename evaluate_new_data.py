@@ -218,11 +218,54 @@ class NewDataEvaluator:
             # Check if training data is available
             train_embeddings_path = self.model_dir / 'train_embeddings.npy'
             train_labels_path = self.model_dir / 'train_labels.npy'
+            train_csv_path = self.model_dir / 'activities_processed.csv'
 
-            if train_embeddings_path.exists() and train_labels_path.exists():
-                # Load training data
-                X_train = np.load(train_embeddings_path)
+            if train_embeddings_path.exists() and train_labels_path.exists() and train_csv_path.exists():
+                # Load text embeddings (384 features)
+                text_embeddings = np.load(train_embeddings_path)
                 y_train = np.load(train_labels_path)
+
+                # Load training CSV to extract numerical features
+                df_train = pd.read_csv(train_csv_path)
+
+                # Extract and normalize numerical features (same as in extract_numerical_features)
+                logger.info("Extracting numerical features from training data...")
+                numerical_features = []
+                feature_names = ['age_min', 'age_max', 'duration_mins']
+
+                for idx, row in df_train.iterrows():
+                    age_min = row.get('age_min', 0)
+                    age_max = row.get('age_max', 0)
+                    duration_mins = row.get('duration_mins', 0)
+
+                    # Handle missing values
+                    if pd.isna(age_min):
+                        age_min = 0
+                    if pd.isna(age_max):
+                        age_max = 0
+                    if pd.isna(duration_mins):
+                        duration_mins = 0
+
+                    numerical_features.append([age_min, age_max, duration_mins])
+
+                numerical_features = np.array(numerical_features, dtype=np.float32)
+
+                # Normalize using training parameters
+                logger.info("Normalizing numerical features...")
+                for i, feat_name in enumerate(feature_names):
+                    col = numerical_features[:, i]
+                    col_min = self.normalization_params[feat_name]['min']
+                    col_max = self.normalization_params[feat_name]['max']
+
+                    if col_max > col_min:
+                        numerical_features[:, i] = (col - col_min) / (col_max - col_min)
+                        logger.info(f"  {feat_name}: normalized using min={col_min:.2f}, max={col_max:.2f}")
+                    else:
+                        logger.warning(f"  {feat_name}: skipping normalization (min == max)")
+
+                # Combine text embeddings with numerical features
+                X_train = np.concatenate([text_embeddings, numerical_features], axis=1)
+                logger.info(f"Combined training features shape: {X_train.shape} (text: {text_embeddings.shape[1]}, numerical: {numerical_features.shape[1]})")
 
                 logger.info(f"Training Random Forest on {len(X_train)} samples...")
 
