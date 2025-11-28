@@ -221,89 +221,15 @@ class NewDataEvaluator:
             train_labels_path = self.model_dir / 'train_labels.npy'
             train_csv_path = self.model_dir / 'activities_processed.csv'
 
-            if train_embeddings_path.exists() and train_labels_path.exists() and train_csv_path.exists():
-                # Load text embeddings (384 features)
-                text_embeddings = np.load(train_embeddings_path)
+            if train_embeddings_path.exists() and train_labels_path.exists():
+                # Load combined features (text embeddings + numerical features)
+                # Note: train_embeddings.npy already contains the combined features after SMOTE balancing
+                # from train_model.py, so we don't need to extract and add numerical features again
+                X_train = np.load(train_embeddings_path)
                 y_train = np.load(train_labels_path)
 
-                # Load full CSV to extract numerical features
-                df_full = pd.read_csv(train_csv_path)
-
-                # Extract numerical features from ALL samples first
-                logger.info("Extracting numerical features from full dataset...")
-                all_numerical_features = []
-                feature_names = ['age_min', 'age_max', 'duration_mins']
-
-                for idx, row in df_full.iterrows():
-                    age_min = row.get('age_min', 0)
-                    age_max = row.get('age_max', 0)
-                    duration_mins = row.get('duration_mins', 0)
-
-                    # Handle missing values
-                    if pd.isna(age_min):
-                        age_min = 0
-                    if pd.isna(age_max):
-                        age_max = 0
-                    if pd.isna(duration_mins):
-                        duration_mins = 0
-
-                    all_numerical_features.append([age_min, age_max, duration_mins])
-
-                all_numerical_features = np.array(all_numerical_features, dtype=np.float32)
-
-                # Apply the same train/test split as in train_model.py
-                # This ensures numerical features match the text embeddings
-                logger.info("Applying train/test split (matching original split)...")
-
-                # Derive age group labels from age_min and age_max
-                def get_age_group(row) -> int:
-                    age_min = row['age_min']
-                    age_max = row['age_max']
-                    age_mid = (age_min + age_max) / 2
-
-                    if age_mid <= 3.5:
-                        return 0  # Toddler
-                    elif age_mid <= 7:
-                        return 1  # Preschool
-                    elif age_mid <= 11:
-                        return 2  # Elementary
-                    else:
-                        return 3  # Teen+
-
-                all_labels = df_full.apply(get_age_group, axis=1).values
-
-                # First split: separate test set (10%)
-                indices = np.arange(len(all_numerical_features))
-                indices_temp, _, num_temp, _, labels_temp, _ = train_test_split(
-                    indices, all_numerical_features, all_labels,
-                    test_size=0.10, random_state=42, stratify=all_labels
-                )
-
-                # Second split: separate train and validation (80% train, 10% val from remaining)
-                indices_train, _, numerical_features, _, _, _ = train_test_split(
-                    indices_temp, num_temp, labels_temp,
-                    test_size=0.111, random_state=42, stratify=labels_temp  # 0.111 * 0.90 ≈ 0.10
-                )
-
-                logger.info(f"After split: {len(numerical_features)} training samples (matches {len(text_embeddings)} embeddings)")
-
-                # Normalize using training parameters
-                logger.info("Normalizing numerical features...")
-                for i, feat_name in enumerate(feature_names):
-                    col = numerical_features[:, i]
-                    col_min = self.normalization_params[feat_name]['min']
-                    col_max = self.normalization_params[feat_name]['max']
-
-                    if col_max > col_min:
-                        numerical_features[:, i] = (col - col_min) / (col_max - col_min)
-                        logger.info(f"  {feat_name}: normalized using min={col_min:.2f}, max={col_max:.2f}")
-                    else:
-                        logger.warning(f"  {feat_name}: skipping normalization (min == max)")
-
-                # Combine text embeddings with numerical features
-                X_train = np.concatenate([text_embeddings, numerical_features], axis=1)
-                logger.info(f"Combined training features shape: {X_train.shape} (text: {text_embeddings.shape[1]}, numerical: {numerical_features.shape[1]})")
-
+                logger.info(f"Loaded training data: {X_train.shape[0]} samples with {X_train.shape[1]} features")
+                logger.info(f"  Features include: text embeddings (384) + numerical features (3)")
                 logger.info(f"Training Random Forest on {len(X_train)} samples...")
 
                 # Initialize and train Random Forest
