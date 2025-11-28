@@ -248,9 +248,14 @@ class NewDataEvaluator:
                 return rf_classifier
             else:
                 logger.warning(
-                    "Training data not found. Random Forest baseline will not be available. "
-                    "To use the Random Forest baseline, ensure train_embeddings.npy and "
-                    "train_labels.npy are present in the models directory."
+                    "Training data not found. Random Forest baseline will not be available."
+                )
+                logger.warning(
+                    "To use the Random Forest baseline, you need to retrain the model using train_model.py. "
+                    "This will generate train_embeddings.npy and train_labels.npy files needed for Random Forest training."
+                )
+                logger.warning(
+                    "The model was updated to save these files automatically. Run: python train_model.py"
                 )
                 return None
 
@@ -623,6 +628,37 @@ class NewDataEvaluator:
             return {}
 
         logger.info("Evaluating Random Forest baseline on new data...")
+
+        # Check if the Random Forest expects the same number of features
+        expected_features = self.rf_classifier.n_features_in_
+        actual_features = embeddings.shape[1]
+
+        if expected_features != actual_features:
+            logger.warning(f"Feature dimension mismatch detected!")
+            logger.warning(f"  Random Forest expects {expected_features} features")
+            logger.warning(f"  Current embeddings have {actual_features} features")
+            logger.warning(f"  This likely means the Random Forest was trained on text embeddings only (384)")
+            logger.warning(f"  but evaluation is using combined embeddings (text + numerical = 387)")
+            logger.info("Retraining Random Forest with correct features...")
+
+            # Delete the old model
+            rf_model_path = self.model_dir / 'random_forest_baseline.pkl'
+            if rf_model_path.exists():
+                rf_model_path.unlink()
+                logger.info(f"Deleted outdated Random Forest model: {rf_model_path}")
+
+            # Retrain with correct features
+            self.rf_classifier = self._load_random_forest_baseline()
+
+            if self.rf_classifier is None:
+                logger.warning("Could not retrain Random Forest. Skipping evaluation.")
+                return {}
+
+            # Verify the new model has the correct number of features
+            if self.rf_classifier.n_features_in_ != actual_features:
+                logger.error(f"Random Forest still has wrong features after retraining!")
+                logger.error(f"  Expected: {actual_features}, Got: {self.rf_classifier.n_features_in_}")
+                return {}
 
         # Get predictions
         predictions = self.rf_classifier.predict(embeddings)

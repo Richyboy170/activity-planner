@@ -572,6 +572,12 @@ class NeuralTrainer:
         self.class_counts = counts.copy()
         self.num_classes = len(np.unique(labels))
 
+        # Store train/test data for saving later (needed for Random Forest baseline training)
+        self.X_train = X_train
+        self.y_train = y_train
+        self.X_test = X_test
+        self.y_test = y_test
+
         return len(np.unique(labels))
 
     def build_model(self, input_dim: int, num_classes: int):
@@ -956,6 +962,23 @@ class NeuralTrainer:
             }, f, indent=2)
 
         logger.info(f"✓ Training history saved to {history_path}")
+
+        # Save train/test embeddings and labels for Random Forest baseline training
+        if hasattr(self, 'X_train') and hasattr(self, 'y_train'):
+            train_emb_path = os.path.join(output_dir, 'train_embeddings.npy')
+            train_labels_path = os.path.join(output_dir, 'train_labels.npy')
+            np.save(train_emb_path, self.X_train)
+            np.save(train_labels_path, self.y_train)
+            logger.info(f"✓ Train embeddings saved to {train_emb_path} (shape: {self.X_train.shape})")
+            logger.info(f"✓ Train labels saved to {train_labels_path} (shape: {self.y_train.shape})")
+
+        if hasattr(self, 'X_test') and hasattr(self, 'y_test'):
+            test_emb_path = os.path.join(output_dir, 'test_embeddings.npy')
+            test_labels_path = os.path.join(output_dir, 'test_labels.npy')
+            np.save(test_emb_path, self.X_test)
+            np.save(test_labels_path, self.y_test)
+            logger.info(f"✓ Test embeddings saved to {test_emb_path} (shape: {self.X_test.shape})")
+            logger.info(f"✓ Test labels saved to {test_labels_path} (shape: {self.y_test.shape})")
 
 
 class ModelTrainer:
