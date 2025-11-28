@@ -1248,6 +1248,22 @@ class NewDataEvaluator:
             "",
             "## 2. Overall Performance on New Data",
             "",
+        ])
+
+        # Add accuracy summary for both models
+        if rf_results:
+            rf_acc = rf_results['overall_metrics']['accuracy']
+            nn_acc = results['overall_metrics']['accuracy']
+            report_lines.extend([
+                f"**Random tree forest (100 trees, max depth 20) accuracy on new data = {rf_acc:.4f}**",
+                "",
+                f"**Neural Network accuracy on new data = {nn_acc:.4f}**",
+                "",
+                "---",
+                "",
+            ])
+
+        report_lines.extend([
             "### Key Metrics",
             "",
             f"- **Accuracy:** {results['overall_metrics']['accuracy']:.4f} ({results['overall_metrics']['accuracy']*100:.2f}%)",
