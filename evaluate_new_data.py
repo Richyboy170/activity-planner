@@ -101,11 +101,11 @@ class NewDataEvaluator:
         self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
         self.classifier = self._load_classifier()
 
-        # Load Random Forest baseline model
-        self.rf_classifier = self._load_random_forest_baseline()
-
-        # Load normalization parameters from training data
+        # Load normalization parameters from training data (needed by Random Forest)
         self.normalization_params = self._load_normalization_params()
+
+        # Load Random Forest baseline model (depends on normalization_params)
+        self.rf_classifier = self._load_random_forest_baseline()
 
         # Age group mapping
         self.age_groups = {
