@@ -1,6 +1,6 @@
 # Model Evaluation on New Data - Comprehensive Report
 
-**Evaluation Date:** 2025-11-28T14:14:12.419677
+**Evaluation Date:** 2025-11-28T16:44:10.345183
 **Model:** models\neural_classifier.pth
 **New Data Source:** dataset/evaluation_dataset.csv
 
@@ -31,9 +31,15 @@
 
 ---
 
-## 2. Overall Performance on New Data
+## 2. Model Comparison: Neural Network vs Random Forest Baseline
 
-### Key Metrics
+Both models evaluated on the same new data.
+
+---
+
+## 3. Neural Network Performance Details
+
+### Overall Metrics
 
 - **Accuracy:** 0.7286 (72.86%)
 - **Precision:** 0.7469
@@ -48,37 +54,9 @@
 - **Min Confidence:** 0.5037
 - **Max Confidence:** 1.0000
 
-### Baseline Comparison (Majority Class Predictor)
-
-- **Baseline Accuracy:** 0.5000 (50.00%)
-- **Baseline Method:** Always predicting **Teen+ (11+)**
-- **Neural Network Improvement:** +0.2286 (45.71%)
-
 ---
 
-## 3. Comparison with Baseline Performance
-
-### Baseline (Original Test Set) vs New Data
-
-| Metric | Baseline | New Data | Difference | Change % |
-|--------|----------|----------|------------|----------|
-| Accuracy | 0.9312 | 0.7286 | -0.2026 | -21.76% |
-| F1-Score | 0.9317 | 0.7208 | -0.2109 | -22.64% |
-
-### Performance Assessment
-
-**Assessment:** ACCEPTABLE
-
-**Rubric Score:** 7/10
-
-**Description:** Model performance does not meet expectations but is reasonable
-
-- Meets Expectations: ✗ No
-- Within Acceptable Range: ✗ No
-
----
-
-## 6. Per-Class Performance on New Data (Neural Network)
+## 5. Per-Class Performance on New Data (Neural Network)
 
 | Age Group | Precision | Recall | F1-Score | Support |
 |-----------|-----------|--------|----------|---------|
@@ -89,7 +67,7 @@
 
 ---
 
-## 7. Detailed Classification Report (Neural Network)
+## 6. Detailed Classification Report (Neural Network)
 
 ```
 Toddler (0-3):
@@ -132,7 +110,7 @@ weighted avg:
 
 ---
 
-## 8. Confusion Matrix
+## 7. Confusion Matrices
 
 ### Neural Network
 See `figures/confusion_matrix_neural_network.png` for visualization.
@@ -148,25 +126,12 @@ Teen+ (11+ |     0      |     0      |     0      |     35
 
 ---
 
-## 9. Conclusions and Recommendations
+## 8. Summary and Recommendations
 
-### ⚠ ACCEPTABLE PERFORMANCE (7/10)
-
-The model shows reasonable performance but does not fully meet expectations:
-
-- Performance on new data is lower than baseline
-- Some degradation in generalization capability
-- Further investigation recommended
-
-**Recommendations:**
-- Analyze failure cases to identify patterns
-- Consider collecting more training data from underperforming classes
-- Review data distribution differences between train and new data
-- May require model retraining with augmented dataset
 
 ---
 
-## 10. Visualizations
+## 9. Visualizations
 
 The following visualizations have been generated:
 
@@ -175,17 +140,14 @@ The following visualizations have been generated:
 2. **Per-Class Performance:** `figures/per_class_performance_neural_network.png`
 3. **Confidence Analysis:** `figures/confidence_analysis_neural_network.png`
 
-### Comparisons
-7. **Baseline vs Neural Network:** `figures/nn_vs_baseline_accuracy.png`
-8. **Neural Network Baseline Comparison:** `figures/baseline_vs_new_comparison_neural_network.png`
 
 ---
 
-## 11. Evaluation Metadata
+## 10. Evaluation Metadata
 
 ```json
 {
-  "evaluation_date": "2025-11-28T14:14:12.419677",
+  "evaluation_date": "2025-11-28T16:44:10.345183",
   "model_path": "models\\neural_classifier.pth",
   "new_data_source": "dataset/evaluation_dataset.csv",
   "data_collection_method": "evaluation",
