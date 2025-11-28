@@ -33,6 +33,7 @@ from sklearn.metrics import (
     confusion_matrix, classification_report
 )
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
 import joblib
 from sentence_transformers import SentenceTransformer
 import matplotlib.pyplot as plt
@@ -225,15 +226,15 @@ class NewDataEvaluator:
                 text_embeddings = np.load(train_embeddings_path)
                 y_train = np.load(train_labels_path)
 
-                # Load training CSV to extract numerical features
-                df_train = pd.read_csv(train_csv_path)
+                # Load full CSV to extract numerical features
+                df_full = pd.read_csv(train_csv_path)
 
-                # Extract and normalize numerical features (same as in extract_numerical_features)
-                logger.info("Extracting numerical features from training data...")
-                numerical_features = []
+                # Extract numerical features from ALL samples first
+                logger.info("Extracting numerical features from full dataset...")
+                all_numerical_features = []
                 feature_names = ['age_min', 'age_max', 'duration_mins']
 
-                for idx, row in df_train.iterrows():
+                for idx, row in df_full.iterrows():
                     age_min = row.get('age_min', 0)
                     age_max = row.get('age_max', 0)
                     duration_mins = row.get('duration_mins', 0)
@@ -246,9 +247,29 @@ class NewDataEvaluator:
                     if pd.isna(duration_mins):
                         duration_mins = 0
 
-                    numerical_features.append([age_min, age_max, duration_mins])
+                    all_numerical_features.append([age_min, age_max, duration_mins])
 
-                numerical_features = np.array(numerical_features, dtype=np.float32)
+                all_numerical_features = np.array(all_numerical_features, dtype=np.float32)
+
+                # Apply the same train/test split as in train_model.py
+                # This ensures numerical features match the text embeddings
+                logger.info("Applying train/test split (matching original split)...")
+                all_labels = df_full['age_group'].values
+
+                # First split: separate test set (10%)
+                indices = np.arange(len(all_numerical_features))
+                indices_temp, _, num_temp, _, labels_temp, _ = train_test_split(
+                    indices, all_numerical_features, all_labels,
+                    test_size=0.10, random_state=42, stratify=all_labels
+                )
+
+                # Second split: separate train and validation (80% train, 10% val from remaining)
+                indices_train, _, numerical_features, _, _, _ = train_test_split(
+                    indices_temp, num_temp, labels_temp,
+                    test_size=0.111, random_state=42, stratify=labels_temp  # 0.111 * 0.90 ≈ 0.10
+                )
+
+                logger.info(f"After split: {len(numerical_features)} training samples (matches {len(text_embeddings)} embeddings)")
 
                 # Normalize using training parameters
                 logger.info("Normalizing numerical features...")
