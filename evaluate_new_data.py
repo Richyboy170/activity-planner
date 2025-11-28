@@ -104,10 +104,6 @@ class NewDataEvaluator:
         # Load Random Forest baseline model
         self.rf_classifier = self._load_random_forest_baseline()
 
-        # Load baseline performance from original test set
-        self.baseline_metrics = self._load_baseline_metrics()
-        self.rf_baseline_metrics = self._load_rf_baseline_metrics()
-
         # Load normalization parameters from training data
         self.normalization_params = self._load_normalization_params()
 
@@ -259,24 +255,6 @@ class NewDataEvaluator:
                 )
                 return None
 
-    def _load_baseline_metrics(self) -> Dict:
-        """Load baseline performance metrics from original test set."""
-        test_report_path = Path('test_results') / 'test_report.json'
-        if test_report_path.exists():
-            with open(test_report_path, 'r') as f:
-                report = json.load(f)
-                # Try 'primary_model' first (current format), then 'neural_network' (legacy format)
-                return report.get('primary_model', report.get('neural_network', {}))
-        return {}
-
-    def _load_rf_baseline_metrics(self) -> Dict:
-        """Load Random Forest baseline performance metrics from original test set."""
-        test_report_path = Path('test_results') / 'test_report.json'
-        if test_report_path.exists():
-            with open(test_report_path, 'r') as f:
-                report = json.load(f)
-                return report.get('baseline_model', {})
-        return {}
 
     def _load_normalization_params(self) -> Dict:
         """
@@ -668,213 +646,70 @@ class NewDataEvaluator:
         logger.info(f"Random Forest evaluation complete - Accuracy: {accuracy:.4f}")
         return results
 
-    def compare_with_baseline(self, new_data_results: Dict) -> Dict:
+    def compare_with_baseline(self, nn_results: Dict, rf_results: Dict) -> Dict:
         """
-        Compare new data performance with baseline (original test set).
+        Compare Neural Network with Random Forest baseline on new data.
 
         Args:
-            new_data_results: Results from new data evaluation
+            nn_results: Results from Neural Network evaluation on new data
+            rf_results: Results from Random Forest evaluation on new data
 
         Returns:
-            Dictionary containing comparison analysis
+            Dictionary containing Random Forest baseline metrics and comparison
         """
-        logger.info("Comparing new data performance with baseline...")
+        logger.info("Comparing Neural Network with Random Forest baseline on new data...")
 
-        if not self.baseline_metrics:
-            logger.warning("No baseline metrics found. Skipping comparison.")
-            return {}
-
-        baseline_acc = self.baseline_metrics.get('accuracy', 0)
-        new_acc = new_data_results['overall_metrics']['accuracy']
-
-        baseline_f1 = self.baseline_metrics.get('f1_score', 0)
-        new_f1 = new_data_results['overall_metrics']['f1_score']
-
-        comparison = {
-            'accuracy': {
-                'baseline': float(baseline_acc),
-                'new_data': float(new_acc),
-                'difference': float(new_acc - baseline_acc),
-                'relative_change_pct': float((new_acc - baseline_acc) / baseline_acc * 100) if baseline_acc > 0 else 0
-            },
-            'f1_score': {
-                'baseline': float(baseline_f1),
-                'new_data': float(new_f1),
-                'difference': float(new_f1 - baseline_f1),
-                'relative_change_pct': float((new_f1 - baseline_f1) / baseline_f1 * 100) if baseline_f1 > 0 else 0
-            }
-        }
-
-        # Determine performance assessment
-        acc_threshold = 0.85  # 85% accuracy threshold for "meets expectations"
-        acc_drop_threshold = 0.10  # 10% absolute drop is concerning
-
-        if new_acc >= acc_threshold and abs(new_acc - baseline_acc) <= acc_drop_threshold:
-            assessment = "EXCELLENT"
-            rubric_score = 10
-            rubric_description = "Model performance meets/exceeds expectations on new data"
-        elif new_acc >= 0.70 and new_acc < acc_threshold:
-            assessment = "ACCEPTABLE"
-            rubric_score = 7
-            rubric_description = "Model performance does not meet expectations but is reasonable"
-        elif new_acc >= 0.50:
-            assessment = "INCONSISTENT"
-            rubric_score = 4
-            rubric_description = "Model performs inconsistently on new samples"
-        elif new_acc > 0:
-            assessment = "POOR"
-            rubric_score = 2
-            rubric_description = "Model performance is far below expectations"
-        else:
-            assessment = "FAILED"
-            rubric_score = 0
-            rubric_description = "No successful evaluation"
-
-        comparison['performance_assessment'] = {
-            'assessment': assessment,
-            'rubric_score': rubric_score,
-            'rubric_description': rubric_description,
-            'meets_expectations': new_acc >= acc_threshold,
-            'within_acceptable_range': abs(new_acc - baseline_acc) <= acc_drop_threshold
-        }
-
-        logger.info(f"Performance Assessment: {assessment} ({rubric_score}/10)")
-        logger.info(f"New Data Accuracy: {new_acc:.4f} | Baseline: {baseline_acc:.4f}")
-
-        return comparison
-
-    def compare_rf_with_baseline(self, new_data_results: Dict) -> Dict:
-        """
-        Compare Random Forest new data performance with baseline (original test set).
-
-        Args:
-            new_data_results: Results from Random Forest new data evaluation
-
-        Returns:
-            Dictionary containing comparison analysis
-        """
-        logger.info("Comparing Random Forest new data performance with baseline...")
-
-        if not self.rf_baseline_metrics:
-            logger.warning("No Random Forest baseline metrics found. Skipping comparison.")
-            return {}
-
-        baseline_acc = self.rf_baseline_metrics.get('accuracy', 0)
-        new_acc = new_data_results['overall_metrics']['accuracy']
-
-        baseline_f1 = self.rf_baseline_metrics.get('f1_score', 0)
-        new_f1 = new_data_results['overall_metrics']['f1_score']
-
-        comparison = {
-            'accuracy': {
-                'baseline': float(baseline_acc),
-                'new_data': float(new_acc),
-                'difference': float(new_acc - baseline_acc),
-                'relative_change_pct': float((new_acc - baseline_acc) / baseline_acc * 100) if baseline_acc > 0 else 0
-            },
-            'f1_score': {
-                'baseline': float(baseline_f1),
-                'new_data': float(new_f1),
-                'difference': float(new_f1 - baseline_f1),
-                'relative_change_pct': float((new_f1 - baseline_f1) / baseline_f1 * 100) if baseline_f1 > 0 else 0
-            }
-        }
-
-        # Determine performance assessment
-        acc_threshold = 0.85  # 85% accuracy threshold for "meets expectations"
-        acc_drop_threshold = 0.10  # 10% absolute drop is concerning
-
-        if new_acc >= acc_threshold and abs(new_acc - baseline_acc) <= acc_drop_threshold:
-            assessment = "EXCELLENT"
-            rubric_score = 10
-            rubric_description = "Random Forest performance meets/exceeds expectations on new data"
-        elif new_acc >= 0.70 and new_acc < acc_threshold:
-            assessment = "ACCEPTABLE"
-            rubric_score = 7
-            rubric_description = "Random Forest performance does not meet expectations but is reasonable"
-        elif new_acc >= 0.50:
-            assessment = "INCONSISTENT"
-            rubric_score = 4
-            rubric_description = "Random Forest performs inconsistently on new samples"
-        elif new_acc > 0:
-            assessment = "POOR"
-            rubric_score = 2
-            rubric_description = "Random Forest performance is far below expectations"
-        else:
-            assessment = "FAILED"
-            rubric_score = 0
-            rubric_description = "No successful evaluation"
-
-        comparison['performance_assessment'] = {
-            'assessment': assessment,
-            'rubric_score': rubric_score,
-            'rubric_description': rubric_description,
-            'meets_expectations': new_acc >= acc_threshold,
-            'within_acceptable_range': abs(new_acc - baseline_acc) <= acc_drop_threshold
-        }
-
-        logger.info(f"Random Forest Performance Assessment: {assessment} ({rubric_score}/10)")
-        logger.info(f"Random Forest New Data Accuracy: {new_acc:.4f} | Baseline: {baseline_acc:.4f}")
-
-        return comparison
-
-
-    def compare_models(self, nn_results: Dict, rf_results: Dict) -> Dict:
-        """
-        Compare Neural Network and Random Forest performance on new data.
-
-        Args:
-            nn_results: Results from Neural Network evaluation
-            rf_results: Results from Random Forest evaluation
-
-        Returns:
-            Dictionary containing model comparison
-        """
         if not rf_results:
-            logger.warning("Random Forest results not available. Skipping model comparison.")
+            logger.warning("No Random Forest results found. Skipping baseline comparison.")
             return {}
 
-        logger.info("Comparing Neural Network vs Random Forest baseline...")
-
-        nn_acc = nn_results['overall_metrics']['accuracy']
+        # Extract Random Forest metrics
         rf_acc = rf_results['overall_metrics']['accuracy']
-
-        nn_f1 = nn_results['overall_metrics']['f1_score']
+        rf_precision = rf_results['overall_metrics']['precision']
+        rf_recall = rf_results['overall_metrics']['recall']
         rf_f1 = rf_results['overall_metrics']['f1_score']
+        rf_conf_matrix = rf_results['confusion_matrix']
+        rf_per_class = rf_results['per_class_metrics']
 
+        # Extract Neural Network metrics for comparison
+        nn_acc = nn_results['overall_metrics']['accuracy']
+        nn_f1 = nn_results['overall_metrics']['f1_score']
+
+        # Build baseline comparison (RF is the baseline)
         comparison = {
-            'accuracy': {
-                'neural_network': float(nn_acc),
-                'random_forest': float(rf_acc),
-                'difference': float(nn_acc - rf_acc),
-                'winner': 'Neural Network' if nn_acc > rf_acc else ('Random Forest' if rf_acc > nn_acc else 'Tie')
-            },
-            'f1_score': {
-                'neural_network': float(nn_f1),
-                'random_forest': float(rf_f1),
-                'difference': float(nn_f1 - rf_f1),
-                'winner': 'Neural Network' if nn_f1 > rf_f1 else ('Random Forest' if rf_f1 > rf_f1 else 'Tie')
-            },
-            'neural_network': {
-                'accuracy': float(nn_acc),
-                'precision': float(nn_results['overall_metrics']['precision']),
-                'recall': float(nn_results['overall_metrics']['recall']),
-                'f1_score': float(nn_f1)
-            },
-            'random_forest': {
+            'baseline_model': 'Random Forest (100 trees, max depth 20)',
+            'baseline_metrics': {
                 'accuracy': float(rf_acc),
-                'precision': float(rf_results['overall_metrics']['precision']),
-                'recall': float(rf_results['overall_metrics']['recall']),
-                'f1_score': float(rf_f1)
+                'precision': float(rf_precision),
+                'recall': float(rf_recall),
+                'f1_score': float(rf_f1),
+                'confusion_matrix': rf_conf_matrix,
+                'per_class_metrics': rf_per_class
+            },
+            'neural_network_vs_baseline': {
+                'accuracy': {
+                    'neural_network': float(nn_acc),
+                    'random_forest_baseline': float(rf_acc),
+                    'difference': float(nn_acc - rf_acc),
+                    'nn_outperforms': nn_acc > rf_acc
+                },
+                'f1_score': {
+                    'neural_network': float(nn_f1),
+                    'random_forest_baseline': float(rf_f1),
+                    'difference': float(nn_f1 - rf_f1),
+                    'nn_outperforms': nn_f1 > rf_f1
+                }
             }
         }
 
-        logger.info(f"Neural Network Accuracy: {nn_acc:.4f} | Random Forest Accuracy: {rf_acc:.4f}")
-        logger.info(f"Winner: {comparison['accuracy']['winner']}")
+        logger.info(f"Random Forest Baseline Accuracy: {rf_acc:.4f}")
+        logger.info(f"Neural Network Accuracy: {nn_acc:.4f}")
+        logger.info(f"Neural Network {'outperforms' if nn_acc > rf_acc else 'underperforms'} baseline by {abs(nn_acc - rf_acc):.4f}")
 
         return comparison
 
-    def generate_visualizations(self, results: Dict, comparison: Dict, rf_results: Dict = None, model_comparison: Dict = None, rf_baseline_comparison: Dict = None):
+
+    def generate_visualizations(self, results: Dict, rf_results: Dict, comparison: Dict):
         """Generate visualization plots for the evaluation."""
         logger.info("Generating visualizations...")
 
@@ -885,35 +720,27 @@ class NewDataEvaluator:
         # 1. Confusion Matrix - Neural Network
         self._plot_confusion_matrix(results, model_name='Neural Network')
 
-        # 2. Confusion Matrix - Random Forest (if available)
+        # 2. Confusion Matrix - Random Forest Baseline
         if rf_results:
-            self._plot_confusion_matrix(rf_results, model_name='Random Forest')
+            self._plot_confusion_matrix(rf_results, model_name='Random Forest Baseline')
 
-        # 3. Performance Comparison with Baseline - Neural Network
-        if comparison:
-            self._plot_performance_comparison(comparison, model_name='Neural Network')
+        # 3. Model Comparison (Neural Network vs Random Forest Baseline)
+        if comparison and rf_results:
+            self._plot_nn_vs_rf_comparison(results, rf_results)
 
-        # 4. Performance Comparison with Baseline - Random Forest (if available)
-        if rf_baseline_comparison:
-            self._plot_performance_comparison(rf_baseline_comparison, model_name='Random Forest')
-
-        # 5. Model Comparison (Neural Network vs Random Forest)
-        if model_comparison:
-            self._plot_model_comparison(model_comparison)
-
-        # 6. Per-Class Performance - Neural Network
+        # 4. Per-Class Performance - Neural Network
         self._plot_per_class_performance(results, model_name='Neural Network')
 
-        # 7. Per-Class Performance - Random Forest (if available)
+        # 5. Per-Class Performance - Random Forest Baseline
         if rf_results:
-            self._plot_per_class_performance(rf_results, model_name='Random Forest')
+            self._plot_per_class_performance(rf_results, model_name='Random Forest Baseline')
 
-        # 8. Confidence Distribution - Neural Network
+        # 6. Confidence Distribution - Neural Network
         self._plot_confidence_distribution(results, model_name='Neural Network')
 
-        # 9. Confidence Distribution - Random Forest (if available)
+        # 7. Confidence Distribution - Random Forest Baseline
         if rf_results:
-            self._plot_confidence_distribution(rf_results, model_name='Random Forest')
+            self._plot_confidence_distribution(rf_results, model_name='Random Forest Baseline')
 
         logger.info(f"Visualizations saved to {self.figures_dir}")
 
@@ -939,59 +766,28 @@ class NewDataEvaluator:
         plt.savefig(self.figures_dir / filename, dpi=300, bbox_inches='tight')
         plt.close()
 
-    def _plot_performance_comparison(self, comparison: Dict, model_name: str = 'Model'):
-        """Plot comparison between baseline and new data performance."""
-        metrics = ['accuracy', 'f1_score']
-        baseline_vals = [comparison[m]['baseline'] for m in metrics]
-        new_data_vals = [comparison[m]['new_data'] for m in metrics]
+    def _plot_nn_vs_rf_comparison(self, nn_results: Dict, rf_results: Dict):
+        """Plot comparison between Neural Network and Random Forest Baseline on new data."""
+        nn_metrics = nn_results['overall_metrics']
+        rf_metrics = rf_results['overall_metrics']
+
+        metrics = ['accuracy', 'precision', 'recall', 'f1_score']
+        metric_labels = ['Accuracy', 'Precision', 'Recall', 'F1-Score']
+        nn_vals = [nn_metrics[m] for m in metrics]
+        rf_vals = [rf_metrics[m] for m in metrics]
 
         x = np.arange(len(metrics))
         width = 0.35
 
-        fig, ax = plt.subplots(figsize=(10, 6))
-        bars1 = ax.bar(x - width/2, baseline_vals, width, label='Original Test Set', alpha=0.8)
-        bars2 = ax.bar(x + width/2, new_data_vals, width, label='New Data', alpha=0.8)
-
-        ax.set_xlabel('Metric', fontsize=12)
-        ax.set_ylabel('Score', fontsize=12)
-        ax.set_title(f'Performance Comparison: Baseline vs New Data - {model_name}', fontsize=14, fontweight='bold')
-        ax.set_xticks(x)
-        ax.set_xticklabels(['Accuracy', 'F1-Score'])
-        ax.legend()
-        ax.set_ylim(0, 1.0)
-        ax.grid(axis='y', alpha=0.3)
-
-        # Add value labels on bars
-        for bars in [bars1, bars2]:
-            for bar in bars:
-                height = bar.get_height()
-                ax.text(bar.get_x() + bar.get_width()/2., height,
-                       f'{height:.3f}',
-                       ha='center', va='bottom', fontsize=10)
-
-        plt.tight_layout()
-        filename = f'baseline_vs_new_comparison_{model_name.lower().replace(" ", "_")}.png'
-        plt.savefig(self.figures_dir / filename, dpi=300, bbox_inches='tight')
-        plt.close()
-
-    def _plot_model_comparison(self, model_comparison: Dict):
-        """Plot comparison between Neural Network and Random Forest."""
-        metrics = ['accuracy', 'f1_score']
-        nn_vals = [model_comparison['neural_network'][m] for m in metrics]
-        rf_vals = [model_comparison['random_forest'][m] for m in metrics]
-
-        x = np.arange(len(metrics))
-        width = 0.35
-
-        fig, ax = plt.subplots(figsize=(10, 6))
+        fig, ax = plt.subplots(figsize=(12, 6))
         bars1 = ax.bar(x - width/2, nn_vals, width, label='Neural Network', alpha=0.8, color='#2E86AB')
-        bars2 = ax.bar(x + width/2, rf_vals, width, label='Random Forest', alpha=0.8, color='#A23B72')
+        bars2 = ax.bar(x + width/2, rf_vals, width, label='Random Forest Baseline', alpha=0.8, color='#A23B72')
 
         ax.set_xlabel('Metric', fontsize=12)
         ax.set_ylabel('Score', fontsize=12)
-        ax.set_title('Model Comparison: Neural Network vs Random Forest Baseline', fontsize=14, fontweight='bold')
+        ax.set_title('Neural Network vs Random Forest Baseline (New Data)', fontsize=14, fontweight='bold')
         ax.set_xticks(x)
-        ax.set_xticklabels(['Accuracy', 'F1-Score'])
+        ax.set_xticklabels(metric_labels)
         ax.legend()
         ax.set_ylim(0, 1.0)
         ax.grid(axis='y', alpha=0.3)
@@ -1005,7 +801,7 @@ class NewDataEvaluator:
                        ha='center', va='bottom', fontsize=10)
 
         plt.tight_layout()
-        plt.savefig(self.figures_dir / 'neural_network_vs_random_forest.png', dpi=300, bbox_inches='tight')
+        plt.savefig(self.figures_dir / 'neural_network_vs_random_forest_baseline.png', dpi=300, bbox_inches='tight')
         plt.close()
 
 
@@ -1068,7 +864,7 @@ class NewDataEvaluator:
         plt.savefig(self.figures_dir / filename, dpi=300, bbox_inches='tight')
         plt.close()
 
-    def generate_report(self, results: Dict, comparison: Dict, data_path: str, rf_results: Dict = None, model_comparison: Dict = None, rf_baseline_comparison: Dict = None) -> str:
+    def generate_report(self, results: Dict, rf_results: Dict, comparison: Dict, data_path: str) -> str:
         """Generate comprehensive evaluation report in Markdown format."""
         logger.info("Generating evaluation report...")
 
@@ -1111,25 +907,62 @@ class NewDataEvaluator:
             "",
             "---",
             "",
-            "## 2. Overall Performance on New Data",
+            "## 2. Model Comparison: Neural Network vs Random Forest Baseline",
+            "",
+            "Both models evaluated on the same new data.",
             "",
         ])
 
-        # Add accuracy summary for both models
-        if rf_results:
-            rf_acc = rf_results['overall_metrics']['accuracy']
-            nn_acc = results['overall_metrics']['accuracy']
+        # Add comparison if available
+        if comparison and rf_results:
+            nn_metrics = results['overall_metrics']
+            rf_metrics = rf_results['overall_metrics']
+
+            nn_acc = nn_metrics['accuracy']
+            rf_acc = rf_metrics['accuracy']
+
             report_lines.extend([
-                f"**Random tree forest (100 trees, max depth 20) accuracy on new data = {rf_acc:.4f}**",
+                "### Performance Summary",
                 "",
-                f"**Neural Network accuracy on new data = {nn_acc:.4f}**",
+                "| Model | Accuracy | Precision | Recall | F1-Score |",
+                "|-------|----------|-----------|--------|----------|",
+                f"| **Neural Network** | {nn_acc:.4f} | {nn_metrics['precision']:.4f} | {nn_metrics['recall']:.4f} | {nn_metrics['f1_score']:.4f} |",
+                f"| **Random Forest Baseline** | {rf_acc:.4f} | {rf_metrics['precision']:.4f} | {rf_metrics['recall']:.4f} | {rf_metrics['f1_score']:.4f} |",
                 "",
-                "---",
+                "### Model Comparison Analysis",
                 "",
             ])
 
+            # Determine winner and add analysis
+            if nn_acc > rf_acc:
+                diff = nn_acc - rf_acc
+                report_lines.extend([
+                    f"✓ **Neural Network outperforms Random Forest Baseline**",
+                    f"  - Accuracy improvement: +{diff:.4f} (+{diff*100:.2f}%)",
+                    f"  - The neural network demonstrates superior performance on new data",
+                    "",
+                ])
+            elif rf_acc > nn_acc:
+                diff = rf_acc - nn_acc
+                report_lines.extend([
+                    f"⚠ **Random Forest Baseline outperforms Neural Network**",
+                    f"  - Accuracy difference: -{diff:.4f} (-{diff*100:.2f}%)",
+                    f"  - The simpler Random Forest baseline may be more suitable for this task",
+                    "",
+                ])
+            else:
+                report_lines.extend([
+                    f"**Models perform equally on new data**",
+                    f"  - Both achieve {nn_acc:.4f} accuracy",
+                    "",
+                ])
+
         report_lines.extend([
-            "### Key Metrics",
+            "---",
+            "",
+            "## 3. Neural Network Performance Details",
+            "",
+            "### Overall Metrics",
             "",
             f"- **Accuracy:** {results['overall_metrics']['accuracy']:.4f} ({results['overall_metrics']['accuracy']*100:.2f}%)",
             f"- **Precision:** {results['overall_metrics']['precision']:.4f}",
@@ -1146,47 +979,18 @@ class NewDataEvaluator:
             "",
         ])
 
-        # Add comparison if available
-        if comparison:
-            assessment = comparison['performance_assessment']
-
+        # Add Random Forest baseline details if available
+        if rf_results:
             report_lines.extend([
                 "---",
                 "",
-                "## 3. Comparison with Baseline Performance",
+                "## 4. Random Forest Baseline Performance Details",
                 "",
-                "### Baseline (Original Test Set) vs New Data",
-                "",
-                "| Metric | Baseline | New Data | Difference | Change % |",
-                "|--------|----------|----------|------------|----------|",
-                f"| Accuracy | {comparison['accuracy']['baseline']:.4f} | {comparison['accuracy']['new_data']:.4f} | {comparison['accuracy']['difference']:+.4f} | {comparison['accuracy']['relative_change_pct']:+.2f}% |",
-                f"| F1-Score | {comparison['f1_score']['baseline']:.4f} | {comparison['f1_score']['new_data']:.4f} | {comparison['f1_score']['difference']:+.4f} | {comparison['f1_score']['relative_change_pct']:+.2f}% |",
-                "",
-                "### Performance Assessment",
-                "",
-                f"**Assessment:** {assessment['assessment']}",
-                "",
-                f"**Rubric Score:** {assessment['rubric_score']}/10",
-                "",
-                f"**Description:** {assessment['rubric_description']}",
-                "",
-                f"- Meets Expectations: {'✓ Yes' if assessment['meets_expectations'] else '✗ No'}",
-                f"- Within Acceptable Range: {'✓ Yes' if assessment['within_acceptable_range'] else '✗ No'}",
-                "",
-            ])
-
-        # Add Random Forest and model comparison if available
-        if rf_results and model_comparison:
-            report_lines.extend([
-                "---",
-                "",
-                "## 4. Random Forest Baseline Performance",
-                "",
-                "### Random Forest Configuration",
+                "### Configuration",
                 "",
                 "- **n_estimators:** 100 trees",
                 "- **max_depth:** 20",
-                "- **Purpose:** Simple, interpretable, minimal tuning baseline",
+                "- **Purpose:** Simple, interpretable baseline with minimal tuning",
                 "",
                 "### Overall Metrics on New Data",
                 "",
@@ -1197,70 +1001,10 @@ class NewDataEvaluator:
                 "",
             ])
 
-            # Add Random Forest baseline comparison if available
-            if rf_baseline_comparison:
-                assessment = rf_baseline_comparison['performance_assessment']
-                report_lines.extend([
-                    "### Random Forest: Baseline (Original Test Set) vs New Data",
-                    "",
-                    "| Metric | Baseline | New Data | Difference | Change % |",
-                    "|--------|----------|----------|------------|----------|",
-                    f"| Accuracy | {rf_baseline_comparison['accuracy']['baseline']:.4f} | {rf_baseline_comparison['accuracy']['new_data']:.4f} | {rf_baseline_comparison['accuracy']['difference']:+.4f} | {rf_baseline_comparison['accuracy']['relative_change_pct']:+.2f}% |",
-                    f"| F1-Score | {rf_baseline_comparison['f1_score']['baseline']:.4f} | {rf_baseline_comparison['f1_score']['new_data']:.4f} | {rf_baseline_comparison['f1_score']['difference']:+.4f} | {rf_baseline_comparison['f1_score']['relative_change_pct']:+.2f}% |",
-                    "",
-                    "### Random Forest Performance Assessment",
-                    "",
-                    f"**Assessment:** {assessment['assessment']}",
-                    "",
-                    f"**Rubric Score:** {assessment['rubric_score']}/10",
-                    "",
-                    f"**Description:** {assessment['rubric_description']}",
-                    "",
-                    f"- Meets Expectations: {'✓ Yes' if assessment['meets_expectations'] else '✗ No'}",
-                    f"- Within Acceptable Range: {'✓ Yes' if assessment['within_acceptable_range'] else '✗ No'}",
-                    "",
-                ])
-
-            report_lines.extend([
-                "---",
-                "",
-                "## 5. Model Comparison: Neural Network vs Random Forest",
-                "",
-                "### Performance Comparison",
-                "",
-                "| Metric | Neural Network | Random Forest | Winner |",
-                "|--------|---------------|---------------|--------|",
-                f"| Accuracy | {model_comparison['neural_network']['accuracy']:.4f} | {model_comparison['random_forest']['accuracy']:.4f} | {model_comparison['accuracy']['winner']} |",
-                f"| Precision | {model_comparison['neural_network']['precision']:.4f} | {model_comparison['random_forest']['precision']:.4f} | - |",
-                f"| Recall | {model_comparison['neural_network']['recall']:.4f} | {model_comparison['random_forest']['recall']:.4f} | - |",
-                f"| F1-Score | {model_comparison['neural_network']['f1_score']:.4f} | {model_comparison['random_forest']['f1_score']:.4f} | {model_comparison['f1_score']['winner']} |",
-                "",
-                "### Analysis",
-                "",
-            ])
-
-            # Add analysis based on comparison
-            nn_acc = model_comparison['neural_network']['accuracy']
-            rf_acc = model_comparison['random_forest']['accuracy']
-            diff = nn_acc - rf_acc
-
-            if abs(diff) < 0.01:
-                report_lines.append("- The Neural Network and Random Forest perform similarly on new data")
-            elif diff > 0.05:
-                report_lines.append(f"- The Neural Network outperforms the Random Forest by {diff:.4f} ({diff*100:.2f}%)")
-                report_lines.append("- The additional complexity of the Neural Network is justified")
-            elif diff > 0:
-                report_lines.append(f"- The Neural Network slightly outperforms the Random Forest by {diff:.4f} ({diff*100:.2f}%)")
-            else:
-                report_lines.append(f"- The Random Forest outperforms the Neural Network by {abs(diff):.4f} ({abs(diff)*100:.2f}%)")
-                report_lines.append("- The simpler Random Forest baseline may be more suitable for this task")
-
-            report_lines.append("")
-
         report_lines.extend([
             "---",
             "",
-            "## 6. Per-Class Performance on New Data (Neural Network)",
+            "## 5. Per-Class Performance on New Data (Neural Network)",
             "",
             "| Age Group | Precision | Recall | F1-Score | Support |",
             "|-----------|-----------|--------|----------|---------|"
@@ -1277,7 +1021,7 @@ class NewDataEvaluator:
             "",
             "---",
             "",
-            "## 7. Detailed Classification Report (Neural Network)",
+            "## 6. Detailed Classification Report (Neural Network)",
             "",
             "```"
         ])
@@ -1297,7 +1041,7 @@ class NewDataEvaluator:
             "",
             "---",
             "",
-            "## 8. Confusion Matrix",
+            "## 7. Confusion Matrices",
             "",
             "### Neural Network",
             "See `figures/confusion_matrix_neural_network.png` for visualization.",
@@ -1306,8 +1050,8 @@ class NewDataEvaluator:
 
         if rf_results:
             report_lines.extend([
-                "### Random Forest",
-                "See `figures/confusion_matrix_random_forest.png` for visualization.",
+                "### Random Forest Baseline",
+                "See `figures/confusion_matrix_random_forest_baseline.png` for visualization.",
                 ""
             ])
 
@@ -1330,86 +1074,67 @@ class NewDataEvaluator:
             "",
             "---",
             "",
-            "## 9. Conclusions and Recommendations",
+            "## 8. Summary and Recommendations",
             "",
         ])
 
-        # Add conclusions based on performance
-        if comparison:
-            assessment = comparison['performance_assessment']
+        # Add conclusions based on comparison with Random Forest
+        if comparison and rf_results:
+            nn_acc = results['overall_metrics']['accuracy']
+            rf_acc = rf_results['overall_metrics']['accuracy']
 
-            if assessment['rubric_score'] >= 10:
+            if nn_acc > rf_acc:
+                diff = nn_acc - rf_acc
                 report_lines.extend([
-                    "### ✓ EXCELLENT PERFORMANCE (10/10)",
+                    "### ✓ Neural Network Outperforms Baseline",
                     "",
-                    "The model demonstrates excellent generalization to new data:",
+                    "The neural network demonstrates superior performance compared to the Random Forest baseline:",
                     "",
-                    "- Performance on new data meets or exceeds baseline expectations",
-                    "- The model shows strong consistency across both test sets",
-                    "- Confidence levels indicate reliable predictions",
-                    "- The model is ready for production deployment on similar data",
+                    f"- Neural Network Accuracy: {nn_acc:.4f} ({nn_acc*100:.2f}%)",
+                    f"- Random Forest Baseline Accuracy: {rf_acc:.4f} ({rf_acc*100:.2f}%)",
+                    f"- Improvement: +{diff:.4f} (+{diff*100:.2f}%)",
                     "",
                     "**Recommendations:**",
+                    "- The neural network is the recommended model for this task",
                     "- Continue monitoring performance on future data batches",
-                    "- Consider the model suitable for production use",
-                    "- Document performance baseline for future comparisons",
+                    "- Consider the neural network suitable for production use",
                 ])
-            elif assessment['rubric_score'] >= 7:
+            elif rf_acc > nn_acc:
+                diff = rf_acc - nn_acc
                 report_lines.extend([
-                    "### ⚠ ACCEPTABLE PERFORMANCE (7/10)",
+                    "### ⚠ Random Forest Baseline Outperforms Neural Network",
                     "",
-                    "The model shows reasonable performance but does not fully meet expectations:",
+                    "The simpler Random Forest baseline demonstrates superior performance:",
                     "",
-                    "- Performance on new data is lower than baseline",
-                    "- Some degradation in generalization capability",
-                    "- Further investigation recommended",
+                    f"- Random Forest Baseline Accuracy: {rf_acc:.4f} ({rf_acc*100:.2f}%)",
+                    f"- Neural Network Accuracy: {nn_acc:.4f} ({nn_acc*100:.2f}%)",
+                    f"- Difference: -{diff:.4f} (-{diff*100:.2f}%)",
                     "",
                     "**Recommendations:**",
-                    "- Analyze failure cases to identify patterns",
-                    "- Consider collecting more training data from underperforming classes",
-                    "- Review data distribution differences between train and new data",
-                    "- May require model retraining with augmented dataset",
-                ])
-            elif assessment['rubric_score'] >= 4:
-                report_lines.extend([
-                    "### ⚠ INCONSISTENT PERFORMANCE (4/10)",
-                    "",
-                    "The model shows inconsistent performance on new data:",
-                    "",
-                    "- Significant performance drop compared to baseline",
-                    "- Model may be overfitting to training data",
-                    "- Substantial improvement needed before production use",
-                    "",
-                    "**Recommendations:**",
-                    "- Investigate data distribution shift between train and new data",
-                    "- Consider regularization techniques to improve generalization",
-                    "- Expand training dataset with more diverse samples",
-                    "- Review feature engineering approach",
-                    "- Retrain model with adjusted hyperparameters",
+                    "- Consider using the Random Forest baseline for production",
+                    "- The simpler model may be more suitable for this task",
+                    "- Review neural network architecture and training process",
+                    "- Investigate if additional tuning could improve neural network performance",
                 ])
             else:
                 report_lines.extend([
-                    "### ✗ POOR PERFORMANCE (≤2/10)",
+                    "### Models Perform Equally",
                     "",
-                    "The model shows poor performance on new data:",
+                    "Both models achieve similar performance on new data:",
                     "",
-                    "- Performance far below expectations",
-                    "- Model does not generalize to new data",
-                    "- Not suitable for production use",
+                    f"- Both models achieve {nn_acc:.4f} accuracy",
                     "",
                     "**Recommendations:**",
-                    "- Complete model redesign likely required",
-                    "- Review problem formulation and feature selection",
-                    "- Investigate data quality and labeling consistency",
-                    "- Consider alternative modeling approaches",
-                    "- Increase training dataset size substantially",
+                    "- Either model is suitable for this task",
+                    "- Consider using the simpler Random Forest for easier deployment",
+                    "- Or use the neural network if there are specific architectural benefits",
                 ])
 
         report_lines.extend([
             "",
             "---",
             "",
-            "## 10. Visualizations",
+            "## 9. Visualizations",
             "",
             "The following visualizations have been generated:",
             "",
@@ -1422,35 +1147,21 @@ class NewDataEvaluator:
 
         if rf_results:
             report_lines.extend([
-                "### Random Forest",
-                "4. **Confusion Matrix:** `figures/confusion_matrix_random_forest.png`",
-                "5. **Per-Class Performance:** `figures/per_class_performance_random_forest.png`",
-                "6. **Confidence Analysis:** `figures/confidence_analysis_random_forest.png`",
+                "### Random Forest Baseline",
+                "4. **Confusion Matrix:** `figures/confusion_matrix_random_forest_baseline.png`",
+                "5. **Per-Class Performance:** `figures/per_class_performance_random_forest_baseline.png`",
+                "6. **Confidence Analysis:** `figures/confidence_analysis_random_forest_baseline.png`",
+                "",
+                "### Model Comparison",
+                "7. **Neural Network vs Random Forest Baseline:** `figures/neural_network_vs_random_forest_baseline.png`",
                 ""
             ])
-
-        report_lines.extend([
-            "### Comparisons",
-        ])
-
-        viz_num = 7
-
-        if comparison:
-            report_lines.append(f"{viz_num}. **Neural Network Baseline Comparison:** `figures/baseline_vs_new_comparison_neural_network.png`")
-            viz_num += 1
-
-        if rf_baseline_comparison:
-            report_lines.append(f"{viz_num}. **Random Forest Baseline Comparison:** `figures/baseline_vs_new_comparison_random_forest.png`")
-            viz_num += 1
-
-        if model_comparison:
-            report_lines.append(f"{viz_num}. **Model Comparison:** `figures/neural_network_vs_random_forest.png`")
 
         report_lines.extend([
             "",
             "---",
             "",
-            "## 11. Evaluation Metadata",
+            "## 10. Evaluation Metadata",
             "",
             "```json",
             json.dumps(self.evaluation_metadata, indent=2),
@@ -1472,23 +1183,14 @@ class NewDataEvaluator:
         logger.info(f"Report saved to {report_path}")
         return report_content
 
-    def save_results(self, results: Dict, comparison: Dict, rf_results: Dict = None, model_comparison: Dict = None, rf_baseline_comparison: Dict = None):
+    def save_results(self, results: Dict, rf_results: Dict, comparison: Dict):
         """Save results to JSON file."""
         output = {
             'metadata': self.evaluation_metadata,
             'neural_network_results': results,
-            'baseline_comparison': comparison,
+            'baseline_comparison': comparison,  # Contains Random Forest baseline metrics and comparison
             'timestamp': datetime.now().isoformat()
         }
-
-        if rf_results:
-            output['random_forest_results'] = rf_results
-
-        if model_comparison:
-            output['model_comparison'] = model_comparison
-
-        if rf_baseline_comparison:
-            output['rf_baseline_comparison'] = rf_baseline_comparison
 
         results_path = self.results_dir / 'new_data_evaluation_results.json'
         with open(results_path, 'w', encoding='utf-8') as f:
@@ -1527,23 +1229,17 @@ class NewDataEvaluator:
         # Step 6: Evaluate Random Forest baseline
         rf_results = self.evaluate_random_forest(embeddings, true_labels)
 
-        # Step 7: Compare Neural Network with baseline (original test set)
-        comparison = self.compare_with_baseline(results)
+        # Step 7: Compare Neural Network with Random Forest baseline (both on new data)
+        comparison = self.compare_with_baseline(results, rf_results)
 
-        # Step 8: Compare Random Forest with baseline (original test set)
-        rf_baseline_comparison = self.compare_rf_with_baseline(rf_results) if rf_results else {}
+        # Step 8: Generate visualizations
+        self.generate_visualizations(results, rf_results, comparison)
 
-        # Step 9: Compare Neural Network with Random Forest
-        model_comparison = self.compare_models(results, rf_results)
+        # Step 9: Generate report
+        self.generate_report(results, rf_results, comparison, new_data_path)
 
-        # Step 10: Generate visualizations
-        self.generate_visualizations(results, comparison, rf_results, model_comparison, rf_baseline_comparison)
-
-        # Step 11: Generate report
-        self.generate_report(results, comparison, new_data_path, rf_results, model_comparison, rf_baseline_comparison)
-
-        # Step 12: Save results
-        self.save_results(results, comparison, rf_results, model_comparison, rf_baseline_comparison)
+        # Step 10: Save results
+        self.save_results(results, rf_results, comparison)
 
         logger.info("="*80)
         logger.info("EVALUATION COMPLETE")
@@ -1552,22 +1248,19 @@ class NewDataEvaluator:
         logger.info(f"Neural Network Accuracy: {results['overall_metrics']['accuracy']:.4f}")
 
         if rf_results:
-            logger.info(f"Random Forest Accuracy: {rf_results['overall_metrics']['accuracy']:.4f}")
+            logger.info(f"Random Forest Baseline Accuracy: {rf_results['overall_metrics']['accuracy']:.4f}")
 
-        if comparison:
-            assessment = comparison['performance_assessment']
-            logger.info(f"Neural Network Performance Assessment: {assessment['assessment']}")
-            logger.info(f"Neural Network Rubric Score: {assessment['rubric_score']}/10")
+        if comparison and rf_results:
+            nn_acc = results['overall_metrics']['accuracy']
+            rf_acc = rf_results['overall_metrics']['accuracy']
+            if nn_acc > rf_acc:
+                logger.info(f"Winner: Neural Network (by {nn_acc - rf_acc:.4f})")
+            elif rf_acc > nn_acc:
+                logger.info(f"Winner: Random Forest Baseline (by {rf_acc - nn_acc:.4f})")
+            else:
+                logger.info("Winner: Tie")
 
-        if rf_baseline_comparison:
-            rf_assessment = rf_baseline_comparison['performance_assessment']
-            logger.info(f"Random Forest Performance Assessment: {rf_assessment['assessment']}")
-            logger.info(f"Random Forest Rubric Score: {rf_assessment['rubric_score']}/10")
-
-        if model_comparison:
-            logger.info(f"Model Comparison Winner: {model_comparison['accuracy']['winner']}")
-
-        return results, comparison, rf_results, model_comparison, rf_baseline_comparison
+        return results, rf_results, comparison
 
 
 def main():
