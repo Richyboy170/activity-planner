@@ -254,7 +254,23 @@ class NewDataEvaluator:
                 # Apply the same train/test split as in train_model.py
                 # This ensures numerical features match the text embeddings
                 logger.info("Applying train/test split (matching original split)...")
-                all_labels = df_full['age_group'].values
+
+                # Derive age group labels from age_min and age_max
+                def get_age_group(row) -> int:
+                    age_min = row['age_min']
+                    age_max = row['age_max']
+                    age_mid = (age_min + age_max) / 2
+
+                    if age_mid <= 3.5:
+                        return 0  # Toddler
+                    elif age_mid <= 7:
+                        return 1  # Preschool
+                    elif age_mid <= 11:
+                        return 2  # Elementary
+                    else:
+                        return 3  # Teen+
+
+                all_labels = df_full.apply(get_age_group, axis=1).values
 
                 # First split: separate test set (10%)
                 indices = np.arange(len(all_numerical_features))
