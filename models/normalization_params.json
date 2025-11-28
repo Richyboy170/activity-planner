@@ -1,0 +1,14 @@
+{
+  "age_min": {
+    "min": 1.0,
+    "max": 65.0
+  },
+  "age_max": {
+    "min": 1.0,
+    "max": 99.0
+  },
+  "duration_mins": {
+    "min": 5.0,
+    "max": 1440.0
+  }
+}

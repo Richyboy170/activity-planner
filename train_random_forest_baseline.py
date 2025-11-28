@@ -88,8 +88,8 @@ def train_and_save_random_forest_baseline():
     print("="*80)
 
     rf_classifier = RandomForestClassifier(
-        n_estimators=100,
-        max_depth=20,
+        n_estimators=50,
+        max_depth=5,
         random_state=42,
         n_jobs=-1,
         verbose=1
