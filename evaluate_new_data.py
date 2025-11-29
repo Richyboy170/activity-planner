@@ -200,8 +200,9 @@ class NewDataEvaluator:
         Load or train Random Forest baseline model.
 
         Random Forest configuration:
-        - 100 trees
-        - Max depth: 20
+        Random Forest configuration:
+        - 50 trees
+        - Max depth: 5
         - Simple, interpretable baseline for comparison
         """
         rf_model_path = self.model_dir / 'random_forest_baseline.pkl'
@@ -234,8 +235,8 @@ class NewDataEvaluator:
 
                 # Initialize and train Random Forest
                 rf_classifier = RandomForestClassifier(
-                    n_estimators=100,
-                    max_depth=20,
+                    n_estimators=50,
+                    max_depth=5,
                     random_state=42,
                     n_jobs=-1,
                     verbose=1
@@ -510,6 +511,7 @@ class NewDataEvaluator:
 
         # Compile results
         results = {
+            'true_labels': true_labels.tolist(),
             'overall_metrics': {
                 'accuracy': float(accuracy),
                 'precision': float(precision),
@@ -683,7 +685,7 @@ class NewDataEvaluator:
 
         # Build baseline comparison (RF is the baseline)
         comparison = {
-            'baseline_model': 'Random Forest (100 trees, max depth 20)',
+            'baseline_model': 'Random Forest (50 trees, max depth 5)',
             'baseline_metrics': {
                 'accuracy': float(rf_acc),
                 'precision': float(rf_precision),
@@ -870,7 +872,7 @@ class NewDataEvaluator:
         plt.savefig(self.figures_dir / filename, dpi=300, bbox_inches='tight')
         plt.close()
 
-    def generate_report(self, results: Dict, rf_results: Dict, comparison: Dict, data_path: str) -> str:
+    def generate_report(self, results: Dict, rf_results: Dict, comparison: Dict, data_path: str, activity_texts: List[str] = None) -> str:
         """Generate comprehensive evaluation report in Markdown format."""
         logger.info("Generating evaluation report...")
 
@@ -913,7 +915,9 @@ class NewDataEvaluator:
             "",
             "---",
             "",
-            "## 2. Model Comparison: Neural Network vs Random Forest Baseline",
+            "## 2. Quantitative Result",
+            "",
+            "### Model Comparison: Neural Network vs Random Forest Baseline",
             "",
             "Both models evaluated on the same new data.",
             "",
@@ -1023,12 +1027,34 @@ class NewDataEvaluator:
                 f"{metrics['f1_score']:.4f} | {metrics['support']} |"
             )
 
+        # Add side-by-side comparison if baseline exists
+        if comparison and rf_results:
+            report_lines.extend([
+                "",
+                "### Side-by-Side Comparison (F1-Score)",
+                "",
+                "| Age Group | Neural Network F1 | Random Forest F1 | Difference |",
+                "|-----------|-------------------|------------------|------------|"
+            ])
+            
+            for age_group in results['per_class_metrics'].keys():
+                nn_f1 = results['per_class_metrics'][age_group]['f1_score']
+                rf_f1 = rf_results['per_class_metrics'][age_group]['f1_score']
+                diff = nn_f1 - rf_f1
+                
+                diff_str = f"+{diff:.4f}" if diff > 0 else f"{diff:.4f}"
+                
+                report_lines.append(
+                    f"| {age_group} | {nn_f1:.4f} | {rf_f1:.4f} | {diff_str} |"
+                )
+
         report_lines.extend([
             "",
             "---",
             "",
-            "## 6. Detailed Classification Report (Neural Network)",
+            "## 6. Detailed Classification Reports",
             "",
+            "### Neural Network",
             "```"
         ])
 
@@ -1044,7 +1070,29 @@ class NewDataEvaluator:
 
         report_lines.extend([
             "```",
-            "",
+            ""
+        ])
+
+        # Add Random Forest classification report
+        if rf_results:
+            report_lines.extend([
+                "### Random Forest Baseline",
+                "```"
+            ])
+            for class_name, metrics in rf_results['classification_report'].items():
+                if isinstance(metrics, dict):
+                    report_lines.append(f"{class_name}:")
+                    report_lines.append(f"  Precision: {metrics.get('precision', 0):.4f}")
+                    report_lines.append(f"  Recall: {metrics.get('recall', 0):.4f}")
+                    report_lines.append(f"  F1-Score: {metrics.get('f1-score', 0):.4f}")
+                    report_lines.append(f"  Support: {metrics.get('support', 0)}")
+                    report_lines.append("")
+            report_lines.extend([
+                "```",
+                ""
+            ])
+
+        report_lines.extend([
             "---",
             "",
             "## 7. Confusion Matrices",
@@ -1136,11 +1184,56 @@ class NewDataEvaluator:
                     "- Or use the neural network if there are specific architectural benefits",
                 ])
 
+        # Add Qualitative Results
+        if activity_texts and 'true_labels' in results and 'predictions' in results:
+            report_lines.extend([
+                "",
+                "---",
+                "",
+                "## 9. Qualitative Result",
+                "",
+                "### Example Predictions",
+                "",
+                "| Activity Text (Snippet) | True Label | Predicted Label | Confidence | Result |",
+                "|-------------------------|------------|-----------------|------------|--------|"
+            ])
+
+            true_labels = results['true_labels']
+            predictions = results['predictions']
+            confidences = results['confidences']
+            
+            # Find correct and incorrect indices
+            correct_indices = [i for i, (t, p) in enumerate(zip(true_labels, predictions)) if t == p]
+            incorrect_indices = [i for i, (t, p) in enumerate(zip(true_labels, predictions)) if t != p]
+            
+            # Select examples (up to 5 correct, up to 5 incorrect)
+            import random
+            selected_correct = random.sample(correct_indices, min(5, len(correct_indices)))
+            selected_incorrect = random.sample(incorrect_indices, min(5, len(incorrect_indices)))
+            
+            # Helper to format row
+            def format_row(idx):
+                text_snippet = activity_texts[idx][:50] + "..." if len(activity_texts[idx]) > 50 else activity_texts[idx]
+                text_snippet = text_snippet.replace("|", "\|").replace("\n", " ")
+                true_lbl = self.age_groups[true_labels[idx]]
+                pred_lbl = self.age_groups[predictions[idx]]
+                conf = confidences[idx]
+                result = "✅ Correct" if true_labels[idx] == predictions[idx] else "❌ Incorrect"
+                return f"| {text_snippet} | {true_lbl} | {pred_lbl} | {conf:.4f} | {result} |"
+
+            for idx in selected_correct:
+                report_lines.append(format_row(idx))
+            
+            for idx in selected_incorrect:
+                report_lines.append(format_row(idx))
+                
+            report_lines.append("")
+
         report_lines.extend([
             "",
             "---",
             "",
-            "## 9. Visualizations",
+            "## 10. Visualizations",
             "",
             "The following visualizations have been generated:",
             "",
@@ -1167,7 +1260,7 @@ class NewDataEvaluator:
             "",
             "---",
             "",
-            "## 10. Evaluation Metadata",
+            "## 11. Evaluation Metadata",
             "",
             "```json",
             json.dumps(self.evaluation_metadata, indent=2),
@@ -1242,7 +1335,7 @@ class NewDataEvaluator:
         self.generate_visualizations(results, rf_results, comparison)
 
         # Step 9: Generate report
-        self.generate_report(results, rf_results, comparison, new_data_path)
+        self.generate_report(results, rf_results, comparison, new_data_path, activity_texts)
 
         # Step 10: Save results
         self.save_results(results, rf_results, comparison)

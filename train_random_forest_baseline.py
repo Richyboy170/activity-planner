@@ -42,6 +42,15 @@ def train_and_save_random_forest_baseline():
     texts = processor.create_text_representations()
     embeddings = embedder.generate_embeddings(texts)
 
+    # Extract numerical features
+    print("\nExtracting numerical features...")
+    numerical_features = processor.extract_numerical_features()
+    
+    # Combine features
+    print(f"\nCombining features: {embeddings.shape[1]} text + {numerical_features.shape[1]} numerical...")
+    combined_features = np.concatenate([embeddings, numerical_features], axis=1)
+    print(f"Combined shape: {combined_features.shape}")
+
     # Create age group labels (matching train_model-unaugmented.py)
     print("\nCreating labels...")
     def get_age_group(row) -> int:
@@ -62,7 +71,7 @@ def train_and_save_random_forest_baseline():
 
     # Split data (80/10/10 - matching test_models.py)
     print("\nSplitting data...")
-    n = len(embeddings)
+    n = len(combined_features)
     train_size = int(0.8 * n)
     val_size = int(0.1 * n)
 
@@ -71,11 +80,11 @@ def train_and_save_random_forest_baseline():
     val_idx = indices[train_size:train_size + val_size]
     test_idx = indices[train_size + val_size:]
 
-    X_train = embeddings[train_idx]
+    X_train = combined_features[train_idx]
     y_train = labels[train_idx]
-    X_val = embeddings[val_idx]
+    X_val = combined_features[val_idx]
     y_val = labels[val_idx]
-    X_test = embeddings[test_idx]
+    X_test = combined_features[test_idx]
     y_test = labels[test_idx]
 
     print(f"Train: {len(X_train)} samples")
@@ -88,8 +97,8 @@ def train_and_save_random_forest_baseline():
     print("="*80)
 
     rf_classifier = RandomForestClassifier(
-        n_estimators=50,
-        max_depth=5,
+        n_estimators=50,  # Reduced to 50 as requested
+        max_depth=5,      # Reduced to 5 as requested
         random_state=42,
         n_jobs=-1,
         verbose=1

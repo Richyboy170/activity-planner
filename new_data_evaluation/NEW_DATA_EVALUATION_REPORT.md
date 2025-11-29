@@ -1,6 +1,6 @@
 # Model Evaluation on New Data - Comprehensive Report
 
-**Evaluation Date:** 2025-11-28T16:44:10.345183
+**Evaluation Date:** 2025-11-29T10:12:40.743679
 **Model:** models\neural_classifier.pth
 **New Data Source:** dataset/evaluation_dataset.csv
 
@@ -31,9 +31,24 @@
 
 ---
 
-## 2. Model Comparison: Neural Network vs Random Forest Baseline
+## 2. Quantitative Result
+
+### Model Comparison: Neural Network vs Random Forest Baseline
 
 Both models evaluated on the same new data.
+
+### Performance Summary
+
+| Model | Accuracy | Precision | Recall | F1-Score |
+|-------|----------|-----------|--------|----------|
+| **Neural Network** | 0.7286 | 0.7469 | 0.7286 | 0.7208 |
+| **Random Forest Baseline** | 0.5857 | 0.4990 | 0.5857 | 0.5124 |
+
+### Model Comparison Analysis
+
+✓ **Neural Network outperforms Random Forest Baseline**
+  - Accuracy improvement: +0.1429 (+14.29%)
+  - The neural network demonstrates superior performance on new data
 
 ---
 
@@ -56,6 +71,23 @@ Both models evaluated on the same new data.
 
 ---
 
+## 4. Random Forest Baseline Performance Details
+
+### Configuration
+
+- **n_estimators:** 100 trees
+- **max_depth:** 20
+- **Purpose:** Simple, interpretable baseline with minimal tuning
+
+### Overall Metrics on New Data
+
+- **Accuracy:** 0.5857 (58.57%)
+- **Precision:** 0.4990
+- **Recall:** 0.5857
+- **F1-Score:** 0.5124
+
+---
+
 ## 5. Per-Class Performance on New Data (Neural Network)
 
 | Age Group | Precision | Recall | F1-Score | Support |
@@ -65,10 +97,20 @@ Both models evaluated on the same new data.
 | Elementary (7-10) | 0.2727 | 0.4286 | 0.3333 | 7 |
 | Teen+ (11+) | 0.8750 | 1.0000 | 0.9333 | 35 |
 
+### Side-by-Side Comparison (F1-Score)
+
+| Age Group | Neural Network F1 | Random Forest F1 | Difference |
+|-----------|-------------------|------------------|------------|
+| Toddler (0-3) | 0.5714 | 0.0000 | +0.5714 |
+| Preschool (4-6) | 0.5455 | 0.3226 | +0.2229 |
+| Elementary (7-10) | 0.3333 | 0.1333 | +0.2000 |
+| Teen+ (11+) | 0.9333 | 0.8046 | +0.1287 |
+
 ---
 
-## 6. Detailed Classification Report (Neural Network)
+## 6. Detailed Classification Reports
 
+### Neural Network
 ```
 Toddler (0-3):
   Precision: 0.5714
@@ -108,12 +150,55 @@ weighted avg:
 
 ```
 
+### Random Forest Baseline
+```
+Toddler (0-3):
+  Precision: 0.0000
+  Recall: 0.0000
+  F1-Score: 0.0000
+  Support: 7.0
+
+Preschool (4-6):
+  Precision: 0.5000
+  Recall: 0.2381
+  F1-Score: 0.3226
+  Support: 21.0
+
+Elementary (7-10):
+  Precision: 0.1250
+  Recall: 0.1429
+  F1-Score: 0.1333
+  Support: 7.0
+
+Teen+ (11+):
+  Precision: 0.6731
+  Recall: 1.0000
+  F1-Score: 0.8046
+  Support: 35.0
+
+macro avg:
+  Precision: 0.3245
+  Recall: 0.3452
+  F1-Score: 0.3151
+  Support: 70.0
+
+weighted avg:
+  Precision: 0.4990
+  Recall: 0.5857
+  F1-Score: 0.5124
+  Support: 70.0
+
+```
+
 ---
 
 ## 7. Confusion Matrices
 
 ### Neural Network
 See `figures/confusion_matrix_neural_network.png` for visualization.
+
+### Random Forest Baseline
+See `figures/confusion_matrix_random_forest_baseline.png` for visualization.
 
 ```
          | Toddler (0 | Preschool  | Elementary | Teen+ (11+
@@ -128,10 +213,42 @@ Teen+ (11+ |     0      |     0      |     0      |     35
 
 ## 8. Summary and Recommendations
 
+### ✓ Neural Network Outperforms Baseline
+
+The neural network demonstrates superior performance compared to the Random Forest baseline:
+
+- Neural Network Accuracy: 0.7286 (72.86%)
+- Random Forest Baseline Accuracy: 0.5857 (58.57%)
+- Improvement: +0.1429 (+14.29%)
+
+**Recommendations:**
+- The neural network is the recommended model for this task
+- Continue monitoring performance on future data batches
+- Consider the neural network suitable for production use
 
 ---
 
-## 9. Visualizations
+## 9. Qualitative Result
+
+### Example Predictions
+
+| Activity Text (Snippet) | True Label | Predicted Label | Confidence | Result |
+|-------------------------|------------|-----------------|------------|--------|
+| Pottery Workshop Pottery Workshop Pottery Workshop... | Teen+ (11+) | Teen+ (11+) | 0.9988 | ✅ Correct |
+| Photography Walk Photography Walk Photography Walk... | Teen+ (11+) | Teen+ (11+) | 0.9609 | ✅ Correct |
+| Adult Yoga Class Adult Yoga Class Adult Yoga Class... | Teen+ (11+) | Teen+ (11+) | 0.9952 | ✅ Correct |
+| Color and Shape Sorting Color and Shape Sorting Co... | Preschool (4-6) | Preschool (4-6) | 0.9995 | ✅ Correct |
+| Hula Hoop Walk Through Hula Hoop Walk Through Hula... | Toddler (0-3) | Toddler (0-3) | 0.6580 | ✅ Correct |
+| Matching Game Hunt Matching Game Hunt Matching Gam... | Toddler (0-3) | Preschool (4-6) | 0.8677 | ❌ Incorrect |
+| Safe Knife Skills Safe Knife Skills Safe Knife Ski... | Preschool (4-6) | Toddler (0-3) | 0.9788 | ❌ Incorrect |
+| Infant Tummy Time Infant Tummy Time Infant Tummy T... | Toddler (0-3) | Preschool (4-6) | 0.7783 | ❌ Incorrect |
+| Paper City Creation Paper City Creation Paper City... | Preschool (4-6) | Elementary (7-10) | 0.5037 | ❌ Incorrect |
+| Comic Book Creation Comic Book Creation Comic Book... | Elementary (7-10) | Teen+ (11+) | 0.5922 | ❌ Incorrect |
+
+
+---
+
+## 10. Visualizations
 
 The following visualizations have been generated:
 
@@ -140,14 +257,22 @@ The following visualizations have been generated:
 2. **Per-Class Performance:** `figures/per_class_performance_neural_network.png`
 3. **Confidence Analysis:** `figures/confidence_analysis_neural_network.png`
 
+### Random Forest Baseline
+4. **Confusion Matrix:** `figures/confusion_matrix_random_forest_baseline.png`
+5. **Per-Class Performance:** `figures/per_class_performance_random_forest_baseline.png`
+6. **Confidence Analysis:** `figures/confidence_analysis_random_forest_baseline.png`
+
+### Model Comparison
+7. **Neural Network vs Random Forest Baseline:** `figures/neural_network_vs_random_forest_baseline.png`
+
 
 ---
 
-## 10. Evaluation Metadata
+## 11. Evaluation Metadata
 
 ```json
 {
-  "evaluation_date": "2025-11-28T16:44:10.345183",
+  "evaluation_date": "2025-11-29T10:12:40.743679",
   "model_path": "models\\neural_classifier.pth",
   "new_data_source": "dataset/evaluation_dataset.csv",
   "data_collection_method": "evaluation",
