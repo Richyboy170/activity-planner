@@ -1,0 +1,10 @@
+# Vercel Ignore
+*.pyc
+__pycache__
+.git
+.gitignore
+.env
+venv/
+env/
+dataset/dataset_augmented.csv
+Project_Final_Report__Family_Activity_LLM_Search.pdf
