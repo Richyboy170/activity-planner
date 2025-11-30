@@ -125,7 +125,16 @@ class ActivityDatabase:
             logger.info("Cleared existing activities for reload")
 
         # Load CSV
-        df = pd.read_csv(csv_path)
+        try:
+            df = pd.read_csv(csv_path, encoding='utf-8')
+        except UnicodeDecodeError:
+            logger.warning(f"UTF-8 decode failed for {csv_path}, trying latin1")
+            try:
+                df = pd.read_csv(csv_path, encoding='latin1')
+            except UnicodeDecodeError:
+                logger.warning(f"Latin1 decode failed for {csv_path}, trying cp1252")
+                df = pd.read_csv(csv_path, encoding='cp1252')
+        
         logger.info(f"Loading {len(df)} activities from {csv_path}...")
 
         # Insert activities

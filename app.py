@@ -15,7 +15,8 @@ from typing import List, Dict, Tuple, Optional
 from flask import Flask, request, jsonify, send_from_directory, session
 from flask_cors import CORS
 from rank_bm25 import BM25Okapi
-from sentence_transformers import SentenceTransformer
+import onnxruntime as ort
+from transformers import AutoTokenizer
 import faiss
 
 from database import ActivityDatabase, initialize_database
@@ -65,10 +66,11 @@ class ActivityRecommenderWithLinkage:
         self.faiss_index = faiss.read_index(f'{models_dir}/faiss_index.bin')
         logger.info(f"✓ FAISS ready ({self.faiss_index.ntotal} vectors)")
 
-        # Load Sentence-BERT model
-        logger.info("Loading Sentence-BERT model...")
-        self.model = SentenceTransformer('all-MiniLM-L6-v2')
-        logger.info("✓ Model ready")
+        # Load ONNX model and tokenizer
+        logger.info("Loading ONNX model...")
+        self.tokenizer = AutoTokenizer.from_pretrained(f'{models_dir}/onnx')
+        self.ort_session = ort.InferenceSession(f'{models_dir}/onnx/model_quantized.onnx')
+        logger.info("✓ ONNX Model ready")
 
         logger.info("="*70)
         logger.info("✅ RECOMMENDER INITIALIZED - READY FOR AI SEARCH!")
@@ -92,9 +94,29 @@ class ActivityRecommenderWithLinkage:
         top_indices = np.argsort(scores)[::-1][:top_k]
         return [(int(idx), float(scores[idx])) for idx in top_indices]
 
+    def _encode_query(self, query: str) -> np.ndarray:
+        """Encode query using ONNX model"""
+        inputs = self.tokenizer(query, return_tensors='numpy', padding=True, truncation=True)
+        onnx_inputs = {
+            'input_ids': inputs['input_ids'],
+            'attention_mask': inputs['attention_mask'],
+            'token_type_ids': inputs['token_type_ids']
+        }
+        outputs = self.ort_session.run(None, onnx_inputs)
+        # Mean pooling
+        last_hidden_state = outputs[0]
+        attention_mask = inputs['attention_mask']
+        
+        input_mask_expanded = np.broadcast_to(np.expand_dims(attention_mask, -1), last_hidden_state.shape)
+        embeddings = np.sum(last_hidden_state * input_mask_expanded, 1) / np.clip(input_mask_expanded.sum(1), a_min=1e-9, a_max=None)
+        
+        # Normalize
+        embeddings = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)
+        return embeddings
+
     def dense_retrieve(self, query: str, top_k: int = 20) -> List[Tuple[int, float]]:
         """Semantic search using FAISS"""
-        query_embedding = self.model.encode([query], convert_to_numpy=True)
+        query_embedding = self._encode_query(query)
         distances, indices = self.faiss_index.search(query_embedding.astype('float32'), top_k)
         scores = 1.0 / (1.0 + distances[0])
         return [(int(idx), float(score)) for idx, score in zip(indices[0], scores)]
@@ -116,7 +138,7 @@ class ActivityRecommenderWithLinkage:
         scores = {}
 
         # 1. Query-Activity Semantic Linkage (using embeddings)
-        query_embedding = self.model.encode([query], convert_to_numpy=True)
+        query_embedding = self._encode_query(query)
         activity_embedding = self.embeddings[activity_idx:activity_idx+1]
         semantic_similarity = float(np.dot(query_embedding, activity_embedding.T)[0][0])
         scores['semantic_linkage'] = max(0.0, min(1.0, semantic_similarity))
