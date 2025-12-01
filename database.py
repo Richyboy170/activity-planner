@@ -5,7 +5,7 @@ Stores activities and group information for embedding calculations
 
 import sqlite3
 import json
-import pandas as pd
+import csv
 from datetime import datetime
 from typing import List, Dict, Optional, Tuple
 import logging
@@ -125,26 +125,33 @@ class ActivityDatabase:
             logger.info("Cleared existing activities for reload")
 
         # Load CSV
+        activities = []
         try:
-            df = pd.read_csv(csv_path, encoding='utf-8')
+            with open(csv_path, 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                activities = list(reader)
         except UnicodeDecodeError:
             logger.warning(f"UTF-8 decode failed for {csv_path}, trying latin1")
             try:
-                df = pd.read_csv(csv_path, encoding='latin1')
+                with open(csv_path, 'r', encoding='latin1') as f:
+                    reader = csv.DictReader(f)
+                    activities = list(reader)
             except UnicodeDecodeError:
                 logger.warning(f"Latin1 decode failed for {csv_path}, trying cp1252")
-                df = pd.read_csv(csv_path, encoding='cp1252')
+                with open(csv_path, 'r', encoding='cp1252') as f:
+                    reader = csv.DictReader(f)
+                    activities = list(reader)
         
-        logger.info(f"Loading {len(df)} activities from {csv_path}...")
+        logger.info(f"Loading {len(activities)} activities from {csv_path}...")
 
         # Insert activities
         inserted = 0
-        for _, row in df.iterrows():
+        for row in activities:
             # Create full text representation
             full_text_parts = []
-            for col in df.columns:
-                if pd.notna(row[col]):
-                    full_text_parts.append(str(row[col]))
+            for val in row.values():
+                if val:
+                    full_text_parts.append(str(val))
             full_text = ' '.join(full_text_parts)
 
             cursor.execute('''

@@ -3,7 +3,7 @@ Activity Planner - Flask Web Application
 Integrated AI search with Sentence-BERT embeddings and group member linkage scoring
 """
 
-import pandas as pd
+import csv
 import numpy as np
 import pickle
 import logging
@@ -16,7 +16,7 @@ from flask import Flask, request, jsonify, send_from_directory, session
 from flask_cors import CORS
 from rank_bm25 import BM25Okapi
 import onnxruntime as ort
-from transformers import AutoTokenizer
+from tokenizers import Tokenizer
 import faiss
 
 from database import ActivityDatabase, initialize_database
@@ -43,16 +43,24 @@ class ActivityRecommenderWithLinkage:
 
         # Load dataset
         logger.info(f"Loading dataset: {dataset_path}")
+        self.activities = []
         try:
-            self.df_activities = pd.read_csv(dataset_path, encoding='utf-8')
+            with open(dataset_path, 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                self.activities = list(reader)
         except UnicodeDecodeError:
             logger.warning(f"UTF-8 decode failed for {dataset_path}, trying latin1")
             try:
-                self.df_activities = pd.read_csv(dataset_path, encoding='latin1')
+                with open(dataset_path, 'r', encoding='latin1') as f:
+                    reader = csv.DictReader(f)
+                    self.activities = list(reader)
             except UnicodeDecodeError:
                 logger.warning(f"Latin1 decode failed for {dataset_path}, trying cp1252")
-                self.df_activities = pd.read_csv(dataset_path, encoding='cp1252')
-        logger.info(f"✓ Loaded {len(self.df_activities)} activities")
+                with open(dataset_path, 'r', encoding='cp1252') as f:
+                    reader = csv.DictReader(f)
+                    self.activities = list(reader)
+        
+        logger.info(f"✓ Loaded {len(self.activities)} activities")
 
         # Create activity texts
         self.activity_texts = self._create_activity_texts()
@@ -76,7 +84,7 @@ class ActivityRecommenderWithLinkage:
 
         # Load ONNX model and tokenizer
         logger.info("Loading ONNX model...")
-        self.tokenizer = AutoTokenizer.from_pretrained(f'{models_dir}/onnx')
+        self.tokenizer = Tokenizer.from_file(f'{models_dir}/onnx/tokenizer.json')
         self.ort_session = ort.InferenceSession(f'{models_dir}/onnx/model_quantized.onnx')
         logger.info("✓ ONNX Model ready")
 
@@ -86,14 +94,14 @@ class ActivityRecommenderWithLinkage:
 
     def _create_activity_texts(self) -> List[str]:
         """Create text for each activity"""
-        def create_text(row):
+        texts = []
+        for activity in self.activities:
             parts = []
-            for col in row.index:
-                if pd.notna(row[col]):
-                    parts.append(str(row[col]))
-            return ' '.join(parts)
-
-        return self.df_activities.apply(create_text, axis=1).tolist()
+            for val in activity.values():
+                if val:
+                    parts.append(str(val))
+            texts.append(' '.join(parts))
+        return texts
 
     def bm25_retrieve(self, query: str, top_k: int = 20) -> List[Tuple[int, float]]:
         """BM25 keyword search"""
@@ -104,16 +112,21 @@ class ActivityRecommenderWithLinkage:
 
     def _encode_query(self, query: str) -> np.ndarray:
         """Encode query using ONNX model"""
-        inputs = self.tokenizer(query, return_tensors='numpy', padding=True, truncation=True)
+        # Tokenize
+        encoding = self.tokenizer.encode(query)
+        input_ids = np.array([encoding.ids], dtype=np.int64)
+        attention_mask = np.array([encoding.attention_mask], dtype=np.int64)
+        token_type_ids = np.array([encoding.type_ids], dtype=np.int64)
+        
         onnx_inputs = {
-            'input_ids': inputs['input_ids'],
-            'attention_mask': inputs['attention_mask'],
-            'token_type_ids': inputs['token_type_ids']
+            'input_ids': input_ids,
+            'attention_mask': attention_mask,
+            'token_type_ids': token_type_ids
         }
         outputs = self.ort_session.run(None, onnx_inputs)
+        
         # Mean pooling
         last_hidden_state = outputs[0]
-        attention_mask = inputs['attention_mask']
         
         input_mask_expanded = np.broadcast_to(np.expand_dims(attention_mask, -1), last_hidden_state.shape)
         embeddings = np.sum(last_hidden_state * input_mask_expanded, 1) / np.clip(input_mask_expanded.sum(1), a_min=1e-9, a_max=None)
@@ -140,7 +153,7 @@ class ActivityRecommenderWithLinkage:
         Calculate linkage scores between query, group members, and activity
         Returns detailed breakdown of scores
         """
-        activity = self.df_activities.iloc[activity_idx]
+        activity = self.activities[activity_idx]
         activity_text = self.activity_texts[activity_idx]
 
         scores = {}
@@ -154,8 +167,17 @@ class ActivityRecommenderWithLinkage:
         # 2. Age Fit Linkage (group members age compatibility)
         if group_members:
             group_ages = [m.get('age', 10) for m in group_members]
-            activity_age_min = activity.get('age_min', 0) if 'age_min' in activity.index else 0
-            activity_age_max = activity.get('age_max', 100) if 'age_max' in activity.index else 100
+            
+            # Parse age_min/max from string or int
+            try:
+                activity_age_min = int(float(activity.get('age_min', 0)))
+            except (ValueError, TypeError):
+                activity_age_min = 0
+                
+            try:
+                activity_age_max = int(float(activity.get('age_max', 100)))
+            except (ValueError, TypeError):
+                activity_age_max = 100
 
             age_fits = []
             for member_age in group_ages:
@@ -286,11 +308,11 @@ class ActivityRecommenderWithLinkage:
             recommendations = []
             for rank, result in enumerate(ranked_results[:top_k], 1):
                 idx = result['activity_idx']
-                activity = self.df_activities.iloc[idx].to_dict()
+                activity = self.activities[idx].copy()
 
                 # Clean up for JSON serialization
                 for col in activity:
-                    if pd.isna(activity[col]):
+                    if activity[col] is None or activity[col] == '':
                         activity[col] = None
                     elif isinstance(activity[col], (list, dict)):
                         activity[col] = str(activity[col])
@@ -374,7 +396,7 @@ def create_app(dataset_path='dataset/dataset.csv', models_dir='models',
         stats = api.db.get_activity_stats() if api else {}
         return jsonify({
             'status': 'healthy',
-            'activities_loaded': len(api.df_activities) if api else 0,
+            'activities_loaded': len(api.activities) if api else 0,
             'database_stats': stats
         }), 200
 
