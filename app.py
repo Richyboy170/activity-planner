@@ -43,7 +43,15 @@ class ActivityRecommenderWithLinkage:
 
         # Load dataset
         logger.info(f"Loading dataset: {dataset_path}")
-        self.df_activities = pd.read_csv(dataset_path)
+        try:
+            self.df_activities = pd.read_csv(dataset_path, encoding='utf-8')
+        except UnicodeDecodeError:
+            logger.warning(f"UTF-8 decode failed for {dataset_path}, trying latin1")
+            try:
+                self.df_activities = pd.read_csv(dataset_path, encoding='latin1')
+            except UnicodeDecodeError:
+                logger.warning(f"Latin1 decode failed for {dataset_path}, trying cp1252")
+                self.df_activities = pd.read_csv(dataset_path, encoding='cp1252')
         logger.info(f"✓ Loaded {len(self.df_activities)} activities")
 
         # Create activity texts
